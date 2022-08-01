@@ -9,7 +9,7 @@ pip install -r requirements.txt
 You can then run I/O Insights with the following options:
 
 ```
-usage: insights.py [-h] [--issues] [--export] [--verbose] darshan
+usage: insights.py [-h] [--issues] [--html] [--svg] [--verbose] darshan
 
 I/O Insights:
 
@@ -19,6 +19,7 @@ positional arguments:
 optional arguments:
   -h, --help  show this help message and exit
   --issues    Only displays the detected issues and hides the recommendations
-  --export    Export the report as an HTML page
+  --html      Export the report as an HTML page
+  --svg       Export the report as an SVG image
   --verbose   Display extended details for the recommendations
 ```

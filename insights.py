@@ -13,6 +13,7 @@ from rich.padding import Padding
 from rich.text import Text
 from rich.syntax import Syntax
 from rich.panel import Panel
+from rich.terminal_theme import MONOKAI
 from subprocess import call
 
 console = Console(record=True)
@@ -68,11 +69,19 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--export',
+    '--html',
     default=False,
     action='store_true',
     dest='export_html',
     help='Export the report as an HTML page'
+)
+
+parser.add_argument(
+    '--svg',
+    default=False,
+    action='store_true',
+    dest='export_svg',
+    help='Export the report as an SVG image'
 )
 
 parser.add_argument(
@@ -995,6 +1004,14 @@ console.print(
 
 if args.export_html:
     console.save_html(
-        'io-insights.html'
+        'io-insights.html',
+        theme=MONOKAI,
+        clear=False
+    )
+
+if args.export_svg:
+    console.save_svg(
+        'io-insights.svg',
+        theme=MONOKAI
     )
 
