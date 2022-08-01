@@ -1,0 +1,3 @@
+MPI_File_open(MPI_COMM_WORLD, "output.txt", MPI_MODE_CREATE|MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+...
+MPI_File_read_all(fh, &buffer, size, MPI_INT, &s);
