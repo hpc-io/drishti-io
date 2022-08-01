@@ -1,5 +1,13 @@
 # I/O Insights
 
+To install I/O Insights, make sure you have Python 3 and first install the dependencies:
+
+```
+pip install -r requirements.txt
+```
+
+You can then run I/O Insights with the following options:
+
 ```
 usage: insights.py [-h] [--issues] [--export] [--verbose] darshan
 
