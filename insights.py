@@ -50,15 +50,6 @@ NUMBER_OF_COMPUTE_NODES = 32
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
 
-
-# It would be benneficial to have the number of nodes alongsize the darshan record
-filename = sys.argv[1]
-
-if not os.path.isfile(filename):
-    print('Unable to open .darshan file.')
-
-    sys.exit(os.EX_NOINPUT)
-
 parser = argparse.ArgumentParser(
     description='I/O Insights: '
 )
@@ -190,12 +181,18 @@ def message(target, level, issue, recommendations=None):
         *messages
     )
 
+
+if not os.path.isfile(args.darshan):
+    print('Unable to open .darshan file.')
+
+    sys.exit(os.EX_NOINPUT)
+
 # clear()
 validate_thresholds()
 
 insights_start_time = time.time()
 
-log = darshanll.log_open(filename)
+log = darshanll.log_open(args.darshan)
 
 # Access various job information
 job = darshanll.log_get_job(log)
@@ -234,7 +231,7 @@ darshanll.log_close(log)
 
 darshan.enable_experimental()
 
-report = darshan.DarshanReport(filename)
+report = darshan.DarshanReport(args.darshan)
 #report.info()
 
 # TEMPLATE
@@ -940,7 +937,7 @@ console.print(
     Panel(
         '\n'.join([
             ' [b]JOB[/b]:       [white]{}[/white]'.format(job['jobid']),
-            ' [b]DARSHAN[/b]:   [white]{}[/white]'.format(filename),
+            ' [b]DARSHAN[/b]:   [white]{}[/white]'.format(args.darshan),
             ' [b]DATE[/b]:      [white]{} to {} ({:.2f} hours)[/white]'.format(
                 job_start,
                 job_end,
