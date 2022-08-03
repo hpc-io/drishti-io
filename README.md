@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hpc-io/io-insights/master/images/drishti-logo.png?raw=true" alt="Drishti"/>
+  <img src="https://github.com/hpc-io/io-insights/blob/master/images/drishti-logo.png?raw=true" alt="Drishti"/>
 </p>
 
 # Drishti: I/O Insights for All
