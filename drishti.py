@@ -558,7 +558,7 @@ if 'POSIX' in report.records:
         if 'MPI-IO' in modules:
             recommendation.append(
                 {
-                    'message': 'Since the appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
+                    'message': 'Since the application already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
                     'sample': Syntax.from_path('snippets/mpi-io-collective-write.c', line_numbers=True, background_color='default')
                 }
             )
@@ -833,16 +833,18 @@ if 'POSIX' in report.records:
 
     shared_files['id'] = shared_files['id'].astype(str)
 
-    # Get the files responsible for more than half of these accesses
+    # Get the files responsible
     detected_files = []
 
     for index, row in shared_files.iterrows():
         total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
-
+        print(row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ'], row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES'])
         if total_transfer_size and (row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > THRESHOLD_STRAGGLERS:
             stragglers_count += 1
 
-            detected_files.append(row['id'])
+            detected_files.append([
+                row['id'], (row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
+            ])
 
     if stragglers_count:
         issue = 'We detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
@@ -851,11 +853,12 @@ if 'POSIX' in report.records:
 
         detail = []
         
-        for file_id in detected_files:
+        for file in detected_files:
             detail.append(
                 {
-                    'message': 'Load imbalance detected while accessing {}'.format(
-                        file_map[int(file_id)]
+                    'message': 'Load imbalance of {:.2f}% detected while accessing {}'.format(
+                        file[1],
+                        file_map[int(file[0])]
                     ) 
                 }
             )
@@ -880,8 +883,13 @@ if 'POSIX' in report.records:
 
     shared_files_times = df['fcounters'].loc[(df['fcounters']['rank'] == -1)]
 
+    # Get the files responsible
+    detected_files = []
+
     stragglers_count = 0
     stragglers_imbalance = {}
+
+    shared_files_times['id'] = shared_files_times['id'].astype(str)
 
     for index, row in shared_files_times.iterrows():
         total_transfer_time = row['POSIX_F_MAX_WRITE_TIME'] + row['POSIX_F_MAX_READ_TIME']
@@ -889,10 +897,26 @@ if 'POSIX' in report.records:
         if total_transfer_time and (row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > THRESHOLD_STRAGGLERS:
             stragglers_count += 1
 
+            detected_files.append([
+                row['id'], (row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
+            ])
+
     if stragglers_count:
         issue = 'We detected time imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
         )
+
+        detail = []
+        
+        for file in detected_files:
+            detail.append(
+                {
+                    'message': 'Load imbalance of {:.2f}% detected while accessing {}'.format(
+                        file[1],
+                        file_map[int(file[0])]
+                    ) 
+                }
+            )
 
         recommendation = [
             {
@@ -905,7 +929,7 @@ if 'POSIX' in report.records:
         ]
 
         insights_operation.append(
-            message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
         )
 
 
