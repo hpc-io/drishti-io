@@ -1,4 +1,8 @@
-# Drishti
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hpc-io/io-insights/master/images/drishti-logo.png?raw=true" alt="Drishti"/>
+</p>
+
+# Drishti: I/O Insights for All
 
 To install Drishti, make sure you have Python 3 and first install the dependencies:
 
