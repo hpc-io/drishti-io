@@ -1,17 +1,17 @@
-# I/O Insights
+# Drishti
 
-To install I/O Insights, make sure you have Python 3 and first install the dependencies:
+To install Drishti, make sure you have Python 3 and first install the dependencies:
 
 ```
 pip install -r requirements.txt
 ```
 
-You can then run I/O Insights with the following options:
+You can then run Drishti with the following options:
 
 ```
-usage: insights.py [-h] [--issues] [--html] [--svg] [--verbose] darshan
+usage: drishti.py [-h] [--issues] [--html] [--svg] [--verbose] [--code] darshan
 
-I/O Insights:
+Drishti:
 
 positional arguments:
   darshan     Input .darshan file
@@ -22,4 +22,5 @@ optional arguments:
   --html      Export the report as an HTML page
   --svg       Export the report as an SVG image
   --verbose   Display extended details for the recommendations
+  --code      Display insights identification code
 ```

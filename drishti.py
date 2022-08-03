@@ -83,7 +83,7 @@ INSIGHTS_MPI_IO_AGGREGATORS = 'M08'
 # TODO: read thresholds from file
 
 parser = argparse.ArgumentParser(
-    description='I/O Insights: '
+    description='Drishti: '
 )
 
 parser.add_argument(
@@ -511,14 +511,14 @@ if 'POSIX' in report.records:
         if 'MPI-IO' in modules:
             recommendation.append(
                 {
-                    'message': 'Since your appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_read_all() or MPI_File_read_at_all()) to aggregate requests into larger ones',
+                    'message': 'Since the appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_read_all() or MPI_File_read_at_all()) to aggregate requests into larger ones',
                     'sample': Syntax.from_path('snippets/mpi-io-collective-read.c', line_numbers=True, background_color='default')
                 }
             )
         else:
             recommendation.append(
                 {
-                    'message': 'Your application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
+                    'message': 'Application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
                 }
             )
 
@@ -558,14 +558,14 @@ if 'POSIX' in report.records:
         if 'MPI-IO' in modules:
             recommendation.append(
                 {
-                    'message': 'Since your appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
+                    'message': 'Since the appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
                     'sample': Syntax.from_path('snippets/mpi-io-collective-write.c', line_numbers=True, background_color='default')
                 }
             )
         else:
             recommendation.append(
                 {
-                    'message': 'Your application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
+                    'message': 'Application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
                 }
             )
 
@@ -603,7 +603,7 @@ if 'POSIX' in report.records:
         if 'HF5' in modules:
             recommendation.append(
                 {
-                    'message': 'Since your appplication uses HDF5, consider using H5Pset_alignment() in a file access property list',
+                    'message': 'Since the appplication uses HDF5, consider using H5Pset_alignment() in a file access property list',
                     'sample': Syntax.from_path('snippets/hdf5-alignment.c', line_numbers=True, background_color='default')
                 },
                 {
@@ -614,7 +614,7 @@ if 'POSIX' in report.records:
         if 'LUSTRE' in modules:
             recommendation.append(
                 {
-                    'message': 'Since your application is accessing Lustre, consider using an alignment that matches the file system stripe configuration',
+                    'message': 'Since the application is accessing Lustre, consider using an alignment that matches the file system stripe configuration',
                     'sample': Syntax.from_path('snippets/lustre-striping.bash', line_numbers=True, background_color='default')
                 }
             )
@@ -701,7 +701,7 @@ if 'POSIX' in report.records:
                 message(INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
         else:
-            issue = 'Your application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) read requests'.format(
+            issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) read requests'.format(
                 read_consecutive / total_reads * 100.0,
                 read_sequential / total_reads * 100.0
             )
@@ -736,7 +736,7 @@ if 'POSIX' in report.records:
                 message(INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
         else:
-            issue = 'Your application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) write requests'.format(
+            issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) write requests'.format(
                 write_consecutive / total_writes * 100.0,
                 write_sequential / total_writes * 100.0
             )
@@ -923,7 +923,7 @@ if 'MPI-IO' in report.records:
 
     if df_mpiio_collective_reads.empty:
         if total_mpiio_read_operations:
-            issue = 'Your application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
+            issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
                 df_mpiio['counters']['MPIIO_INDEP_READS'].sum(),
                 df_mpiio['counters']['MPIIO_INDEP_READS'].sum() / (total_mpiio_read_operations) * 100
             )
@@ -939,7 +939,7 @@ if 'MPI-IO' in report.records:
                 message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
     else:
-        issue = 'Your application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
+        issue = 'Application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
             df_mpiio['counters']['MPIIO_COLL_READS'].sum(),
             df_mpiio['counters']['MPIIO_COLL_READS'].sum() / (df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()) * 100
         )
@@ -954,7 +954,7 @@ if 'MPI-IO' in report.records:
 
     if df_mpiio_collective_writes.empty:
         if total_mpiio_write_operations:
-            issue = 'Your application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
+            issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
                 df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum(),
                 df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() / (total_mpiio_write_operations) * 100
             )
@@ -970,7 +970,7 @@ if 'MPI-IO' in report.records:
                 message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
     else:
-        issue = 'Your application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
+        issue = 'Application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
             df_mpiio['counters']['MPIIO_COLL_WRITES'].sum(),
             df_mpiio['counters']['MPIIO_COLL_WRITES'].sum() / (df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()) * 100
         )
@@ -984,7 +984,7 @@ if 'MPI-IO' in report.records:
     # Look for usage of non-block operations
 
     if df_mpiio['counters']['MPIIO_NB_READS'].sum() == 0:
-        issue = 'Your application does not use non-blocking (asynchronous) reads'
+        issue = 'Application could benefit from non-blocking (asynchronous) reads'
 
         recommendation = []
 
@@ -1009,7 +1009,7 @@ if 'MPI-IO' in report.records:
         )
 
     if df_mpiio['counters']['MPIIO_NB_WRITES'].sum() == 0:
-        issue = 'Your application does not use non-blocking (asynchronous) writes'
+        issue = 'Application could benefit from non-blocking (asynchronous) writes'
 
         recommendation = []
 
@@ -1059,7 +1059,7 @@ for hint in hints:
 
 # Do we have one MPI-IO aggregator per node?
 if cb_nodes != NUMBER_OF_COMPUTE_NODES:
-    issue = 'Your application is using inter-node aggregators (which require network communication)'
+    issue = 'Application is using inter-node aggregators (which require network communication)'
 
     recommendation = [
         {
