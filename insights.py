@@ -4,6 +4,8 @@ import time
 import datetime
 import argparse
 
+import pandas as pd
+
 import darshan
 import darshan.backend.cffi_backend as darshanll
 
@@ -47,6 +49,35 @@ THRESHOLD_STRAGGLERS = 0.15
 THRESHOLD_INTERFACE_STDIO = 0.1
 
 NUMBER_OF_COMPUTE_NODES = 32
+
+INSIGHTS_STDIO_HIGH_USAGE = 'S01'
+INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
+INSIGHTS_POSIX_READ_COUNT_INTENSIVE = 'P02'
+INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE = 'P03'
+INSIGHTS_POSIX_READ_SIZE_INTENSIVE = 'P04'
+INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE = 'P05'
+INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE = 'P06'
+INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE = 'P07'
+INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE = 'P08'
+INSIGHTS_POSIX_REDUNDANT_READ_USAGE = 'P09'
+INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE = 'P10'
+INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE = 'P11'
+INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE = 'P12'
+INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE = 'P13'
+INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE = 'P14'
+INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE = 'P15'
+INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE = 'P16'
+INSIGHTS_POSIX_HIGH_METADATA_TIME = 'P17'
+INSIGHTS_POSIX_SIZE_IMBALANCE = 'P18'
+INSIGHTS_POSIX_TIME_IMBALANCE = 'P19'
+INSIGHTS_MPI_IO_NO_USAGE = 'M01'
+INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE = 'M02'
+INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE = 'M03'
+INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE = 'M04'
+INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE = 'M05'
+INSIGHTS_MPI_IO_BLOCKING_READ_USAGE = 'M06'
+INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE = 'M07'
+INSIGHTS_MPI_IO_AGGREGATORS = 'M08'
 
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
@@ -92,6 +123,14 @@ parser.add_argument(
     help='Display extended details for the recommendations'
 )
 
+parser.add_argument(
+    '--code',
+    default=False,
+    action='store_true',
+    dest='code',
+    help='Display insights identification code'
+)
+
 args = parser.parse_args()
 
 
@@ -135,10 +174,10 @@ def convert_bytes(bytes_number):
         i = i + 1
         bytes_number = bytes_number / 1024
 
-    return str(round(double_bytes, 2)) + ' ' + tags[i]
+    return str(round(double_bytes, 2)) + ' ' + tags[i] 
 
 
-def message(target, level, issue, recommendations=None):
+def message(code, target, level, issue, recommendations=None, details=None):
     """
     Display the message on the screen with level, issue, and recommendation.
     """
@@ -157,12 +196,21 @@ def message(target, level, issue, recommendations=None):
         color = ''
 
     messages = [
-        ' {}{} {}'.format(
+        ' {}{}{} {}'.format(
             color,
             icon,
+            ' [' + code + ']' if args.code else '',
             issue
         )
     ]
+
+    if details:
+        for detail in details:
+            messages.append('   {}:left_arrow_curving_right: {}'.format(
+                    color,
+                    detail['message']
+                )
+            )
 
     if recommendations:
         if not args.only_issues:
@@ -176,7 +224,7 @@ def message(target, level, issue, recommendations=None):
                         Padding(
                             Panel(
                                 recommendation['sample'],
-                                title='Solution Snippet',
+                                title='Solution Example Snippet',
                                 title_align='left',
                                 padding=(1, 2)
                             ),
@@ -204,7 +252,7 @@ insights_start_time = time.time()
 log = darshanll.log_open(args.darshan)
 
 # Access various job information
-job = darshanll.log_get_job(log)
+# job = darshanll.log_get_job(log)
 
 # print(job)
 # Example Return:
@@ -218,8 +266,6 @@ job = darshanll.log_get_job(log)
 # print(darshanll.log_get_modules(log))
 
 modules = darshanll.log_get_modules(log)
-
-# print(modules)
 
 # Example Return:
 # {'POSIX': {'len': 186, 'ver': 3, 'idx': 1},
@@ -243,6 +289,8 @@ darshan.enable_experimental()
 report = darshan.DarshanReport(args.darshan)
 #report.info()
 
+job = report.metadata
+
 # TEMPLATE
 # -----------
 # Target: End-user, developer, sysadmin
@@ -257,8 +305,7 @@ report = darshan.DarshanReport(args.darshan)
 
 #########################################################################################################################################################################
 
-# Check usage of STDIO, POSIX, and MPI-IO
-
+# Check usage of STDIO, POSIX, and MPI-IO per file
 df_stdio = report.records['STDIO'].to_df()
 
 if 'STDIO' in report.records:
@@ -307,6 +354,35 @@ assert(total_size_stdio >= 0)
 assert(total_size_posix >= 0)
 assert(total_size_mpiio >= 0)
 
+files = {}
+
+# Check interface usage for each file
+file_map = report.name_records
+
+total_files = len(file_map)
+
+total_files_stdio = 0
+total_files_posix = 0
+total_files_mpiio = 0
+
+for id, path in file_map.items():
+    uses_stdio = len(df_stdio['counters'][(df_stdio['counters']['id'] == id)]) > 0
+    uses_posix = len(df_posix['counters'][(df_posix['counters']['id'] == id)]) > 0
+    uses_mpiio = len(df_mpiio['counters'][(df_mpiio['counters']['id'] == id)]) > 0
+
+    total_files_stdio += uses_stdio
+    total_files_posix += uses_posix
+    total_files_mpiio += uses_mpiio
+
+    files[id] = {
+        'path': path,
+        'stdio': uses_stdio,
+        'posix': uses_posix,
+        'mpiio': uses_mpiio
+    }
+
+df_posix_files = df_posix
+
 if total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
     issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
         total_size_stdio / total_size * 100.0,
@@ -316,7 +392,7 @@ if total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
     recommendation = 'Consider switching to a high-performance I/O interface such as MPI-IO'
 
     insights_operation.append(
-        message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+        message(INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
     )
 
 if 'MPI-IO' not in modules:
@@ -329,7 +405,7 @@ if 'MPI-IO' not in modules:
     ]
 
     insights_operation.append(
-        message(TARGET_DEVELOPER, WARN, issue, recommendation)
+        message(INSIGHTS_MPI_IO_NO_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
     )
 
 #########################################################################################################################################################################
@@ -357,7 +433,7 @@ if 'POSIX' in report.records:
         )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, INFO, issue, None)
+            message(INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
     if total_reads > total_writes and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
@@ -366,7 +442,7 @@ if 'POSIX' in report.records:
         )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, INFO, issue, None)
+            message(INSIGHTS_POSIX_READ_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
     total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
@@ -380,7 +456,7 @@ if 'POSIX' in report.records:
         )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, INFO, issue, None)
+            message(INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
     if total_read_size > total_written_size and abs(total_written_size - total_read_size) / (total_written_size + total_read_size) > THRESHOLD_OPERATION_IMBALANCE:
@@ -389,7 +465,7 @@ if 'POSIX' in report.records:
         )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, INFO, issue, None)
+            message(INSIGHTS_POSIX_READ_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
     #########################################################################################################################################################################
@@ -397,16 +473,40 @@ if 'POSIX' in report.records:
     # Get the number of small I/O operations (less than 1 MB)
     total_reads_small = df['counters']['POSIX_SIZE_READ_0_100'].sum() + df['counters']['POSIX_SIZE_READ_1K_10K'].sum() + df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
 
+    # Get the files responsible for more than half of these accesses
+    files = []
+
+    df['counters']['INSIGHTS_POSIX_SMALL'] = df['counters']['POSIX_SIZE_READ_0_100'] + df['counters']['POSIX_SIZE_READ_1K_10K'] + df['counters']['POSIX_SIZE_READ_100K_1M']
+
+    detected_files = pd.DataFrame(df['counters'].groupby('id')['INSIGHTS_POSIX_SMALL'].sum()).reset_index()
+    detected_files.columns = ['id', 'total']
+    detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
+
     if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS:
-        issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all requests'.format(
+        issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
             total_reads_small, total_reads_small / total_reads * 100.0
         )
 
-        recommendation = [
+        detail = []
+        recommendation = []
+
+        for index, row in detected_files.iterrows():
+            if row['total'] > (total_reads * THRESHOLD_SMALL_REQUESTS / 2):
+                detail.append(
+                    {
+                        'message': '{} ({:.2f}%) small read requests are to {}'.format(
+                            row['total'],
+                            row['total'] / total_reads * 100.0,
+                            file_map[int(row['id'])]
+                        ) 
+                    }
+                )
+
+        recommendation.append(
             {
                 'message': 'Consider buffering read operations into larger more contiguous ones'
             }
-        ]
+        )
 
         if 'MPI-IO' in modules:
             recommendation.append(
@@ -418,27 +518,42 @@ if 'POSIX' in report.records:
         else:
             recommendation.append(
                 {
-                    'message': 'Your application do not use MPI-IO for operations, consider use this interface instead to harness collective operations'
+                    'message': 'Your application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
                 }
             )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
         )
 
     # Get the number of small I/O operations (less than the stripe size)
     total_writes_small = df['counters']['POSIX_SIZE_WRITE_0_100'].sum() + df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() + df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
 
     if total_writes_small and total_writes_small / total_writes > THRESHOLD_SMALL_REQUESTS:
-        issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all requests'.format(
+        issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
             total_writes_small, total_writes_small / total_writes * 100.0
         )
 
-        recommendation = [
+        detail = []
+        recommendation = []
+
+        for index, row in detected_files.iterrows():
+            if row['total'] > (total_writes * THRESHOLD_SMALL_REQUESTS / 2):
+                detail.append(
+                    {
+                        'message': '{} ({:.2f}%) small write requests are to {}'.format(
+                            row['total'],
+                            row['total'] / total_writes * 100.0,
+                            file_map[int(row['id'])]
+                        ) 
+                    }
+                )
+
+        recommendation.append(
             {
-                'message': 'Consider buffering read operations into larger more contiguous ones'
+                'message': 'Consider buffering write operations into larger more contiguous ones'
             }
-        ]
+        )
 
         if 'MPI-IO' in modules:
             recommendation.append(
@@ -450,12 +565,12 @@ if 'POSIX' in report.records:
         else:
             recommendation.append(
                 {
-                    'message': 'Your application do not use MPI-IO for operations, consider use this interface instead to harness collective operations'
+                    'message': 'Your application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
                 }
             )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
         )
 
     #########################################################################################################################################################################
@@ -471,7 +586,7 @@ if 'POSIX' in report.records:
         )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, HIGH, issue, None)
+            message(INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
         )
 
     if total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
@@ -485,7 +600,7 @@ if 'POSIX' in report.records:
             }
         ]
 
-        if 'HDF5' in modules:
+        if 'HF5' in modules:
             recommendation.append(
                 {
                     'message': 'Since your appplication uses HDF5, consider using H5Pset_alignment() in a file access property list',
@@ -505,7 +620,7 @@ if 'POSIX' in report.records:
             )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
     #########################################################################################################################################################################
@@ -544,16 +659,16 @@ if 'POSIX' in report.records:
         issue = 'Application might have redundant read traffic (more data was read than the highest read offset)'
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, WARN, issue, None)
+            message(INSIGHTS_POSIX_REDUNDANT_READ_USAGE, TARGET_DEVELOPER, WARN, issue, None)
         )
 
     max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
     if max_write_offset > total_written_size:
-        issue = 'Application might have redundant write traffic (more data was write than the highest write offset)'
+        issue = 'Application might have redundant write traffic (more data was written than the highest write offset)'
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, WARN, issue, None)
+            message(INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, None)
         )
 
     #########################################################################################################################################################################
@@ -583,7 +698,7 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
         else:
             issue = 'Your application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) read requests'.format(
@@ -592,7 +707,7 @@ if 'POSIX' in report.records:
             )
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, OK, issue, None)
+                message(INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE, TARGET_DEVELOPER, OK, issue, None)
             )
 
     write_consecutive = df['counters']['POSIX_CONSEC_WRITES'].sum()
@@ -618,7 +733,7 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
         else:
             issue = 'Your application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) write requests'.format(
@@ -627,7 +742,7 @@ if 'POSIX' in report.records:
             )
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, OK, issue, None)
+                message(INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE, TARGET_DEVELOPER, OK, issue, None)
             )
 
     #########################################################################################################################################################################
@@ -654,7 +769,7 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
 
         total_shared_writes = shared_files['POSIX_WRITES'].sum()
@@ -673,7 +788,7 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
 
     #########################################################################################################################################################################
@@ -691,7 +806,7 @@ if 'POSIX' in report.records:
             }
         ]
 
-        if 'HDF5' in modules:
+        if 'HF5' in modules:
             recommendation.append(
                 {
                     'message': 'Since your appplication uses HDF5, try enabling collective metadata calls with H5Pset_coll_metadata_write() and H5Pset_all_coll_metadata_ops()',
@@ -704,7 +819,7 @@ if 'POSIX' in report.records:
             )
 
         insights_metadata.append(
-            message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_HIGH_METADATA_TIME, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
     # We already have a single line for each shared-file access
@@ -716,16 +831,34 @@ if 'POSIX' in report.records:
 
     stragglers_count = 0
 
+    shared_files['id'] = shared_files['id'].astype(str)
+
+    # Get the files responsible for more than half of these accesses
+    detected_files = []
+
     for index, row in shared_files.iterrows():
         total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
 
         if total_transfer_size and (row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > THRESHOLD_STRAGGLERS:
             stragglers_count += 1
 
+            detected_files.append(row['id'])
+
     if stragglers_count:
         issue = 'We detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
         )
+
+        detail = []
+        
+        for file_id in detected_files:
+            detail.append(
+                {
+                    'message': 'Load imbalance detected while accessing {}'.format(
+                        file_map[int(file_id)]
+                    ) 
+                }
+            )
 
         recommendation = [
             {
@@ -738,7 +871,7 @@ if 'POSIX' in report.records:
         ]
 
         insights_operation.append(
-            message(TARGET_USER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_SIZE_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
         )
 
     # POSIX_F_FASTEST_RANK_TIME
@@ -772,7 +905,7 @@ if 'POSIX' in report.records:
         ]
 
         insights_operation.append(
-            message(TARGET_USER, HIGH, issue, recommendation)
+            message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation)
         )
 
 
@@ -803,7 +936,7 @@ if 'MPI-IO' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
     else:
         issue = 'Your application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
@@ -812,7 +945,7 @@ if 'MPI-IO' in report.records:
         )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, OK, issue)
+            message(INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, OK, issue)
         )
 
     df_mpiio_collective_writes = df_mpiio['counters'].loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
@@ -834,7 +967,7 @@ if 'MPI-IO' in report.records:
             ]
 
             insights_operation.append(
-                message(TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
     else:
         issue = 'Your application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
@@ -843,7 +976,7 @@ if 'MPI-IO' in report.records:
         )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, OK, issue)
+            message(INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, OK, issue)
         )
 
     #########################################################################################################################################################################
@@ -853,56 +986,64 @@ if 'MPI-IO' in report.records:
     if df_mpiio['counters']['MPIIO_NB_READS'].sum() == 0:
         issue = 'Your application does not use non-blocking (asynchronous) reads'
 
-        recommendation = [
-            {
-                'message': 'If you use HDF5, considering using the ASYNC VOL connector (https://github.com/hpc-io/vol-async)',
-                'sample': Syntax.from_path('snippets/hdf5-vol-async.c', line_numbers=True, background_color='default')
-            },
-            {
-                'message': 'If you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
-                'sample': Syntax.from_path('snippets/mpi-io-iread.c', line_numbers=True, background_color='default')
-            }
-        ]
+        recommendation = []
+
+        if 'H5F' in modules:
+            recommendation.append(
+                {
+                    'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
+                    'sample': Syntax.from_path('snippets/hdf5-vol-async-read.c', line_numbers=True, background_color='default')
+                }
+            )
+
+        if 'MPI-IO' in modules:
+            recommendation.append(
+                {
+                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
+                    'sample': Syntax.from_path('snippets/mpi-io-iread.c', line_numbers=True, background_color='default')
+                }
+            )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, WARN, issue, recommendation)
+            message(INSIGHTS_MPI_IO_BLOCKING_READ_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
         )
 
     if df_mpiio['counters']['MPIIO_NB_WRITES'].sum() == 0:
         issue = 'Your application does not use non-blocking (asynchronous) writes'
 
-        recommendation = [
-            {
-                'message': 'If you use HDF5, considering using the ASYNC VOL connector (https://github.com/hpc-io/vol-async)',
-                'sample': Syntax.from_path('snippets/hdf5-vol-async.c', line_numbers=True, background_color='default')
-            },
-            {
-                'message': 'If you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
-                'sample': Syntax.from_path('snippets/mpi-io-iwrite.c', line_numbers=True, background_color='default')
-            }
-        ]
+        recommendation = []
+
+        if 'H5F' in modules:
+            recommendation.append(
+                {
+                    'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
+                    'sample': Syntax.from_path('snippets/hdf5-vol-async-write.c', line_numbers=True, background_color='default')
+                }
+            )
+
+        if 'MPI-IO' in modules:
+            recommendation.append(
+                {
+                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
+                    'sample': Syntax.from_path('snippets/mpi-io-iwrite.c', line_numbers=True, background_color='default')
+                }
+            )
 
         insights_operation.append(
-            message(TARGET_DEVELOPER, WARN, issue, recommendation)
+            message(INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
         )
 
 #########################################################################################################################################################################
 
 # Nodes and MPI-IO aggregators
 # If the application uses collective reads or collective writes, look for the number of aggregators
-metadata = job['metadata']
+hints = ''
 
-if 'h' in metadata:
-    hints = metadata['h']
+if 'h' in job['job']['metadata']:
+    hints = job['job']['metadata']['h']
 
     if hints:
         hints = hints.split(';')
-
-issue = 'Detected MPI-IO hints: {}'.format(' '.join(hints))
-
-insights_operation.append(
-    message(TARGET_USER, INFO, issue)
-)
 
 # print('Hints: ', hints)
 
@@ -930,30 +1071,48 @@ if cb_nodes != NUMBER_OF_COMPUTE_NODES:
     ]
 
     insights_operation.append(
-        message(TARGET_USER, WARN, issue, recommendation)
+        message(INSIGHTS_MPI_IO_AGGREGATORS, TARGET_USER, WARN, issue, recommendation)
     )
 
 #########################################################################################################################################################################
 
 insights_end_time = time.time()
 
-job_start = datetime.datetime.fromtimestamp(job['start_time'], datetime.timezone.utc)
-job_end = datetime.datetime.fromtimestamp(job['end_time'], datetime.timezone.utc)
+job_start = datetime.datetime.fromtimestamp(job['job']['start_time'], datetime.timezone.utc)
+job_end = datetime.datetime.fromtimestamp(job['job']['end_time'], datetime.timezone.utc)
 
 console.print()
 
 console.print(
     Panel(
         '\n'.join([
-            ' [b]JOB[/b]:       [white]{}[/white]'.format(job['jobid']),
-            ' [b]DARSHAN[/b]:   [white]{}[/white]'.format(args.darshan),
-            ' [b]DATE[/b]:      [white]{} to {} ({:.2f} hours)[/white]'.format(
+            ' [b]JOB[/b]:            [white]{}[/white]'.format(
+                job['job']['jobid']
+            ),
+            ' [b]EXECUTABLE[/b]:     [white]{}[/white]'.format(
+                job['exe'].split()[0]
+            ),
+            ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
+                args.darshan
+            ),
+            ' [b]EXECUTION DATE[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                 job_start,
                 job_end,
                 (job_end - job_start).total_seconds() / 3600
+            ),
+            ' [b]FILES[/b]:          [white]{} files ({} use STDIO, {} use POSIX, {} use MPI-IO)[/white]'.format(
+                total_files,
+                total_files_stdio,
+                total_files_posix - total_files_mpiio,  # Since MPI-IO files will always use POSIX, we can decrement to get a unique count
+                total_files_mpiio
+            ),
+            ' [b]PROCESSES[/b]       [white]{}[/white]'.format(
+                job['job']['nprocs']),
+            ' [b]HINTS[/b]:          [white]{}[/white]'.format(
+                ' '.join(hints)
             )
         ]),
-        title='[b]I/O INSIGHTS v.0.2[/b]',
+        title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.3[/b]',
         title_align='left',
         subtitle='[red][b]{} critical issues[/b][/red], [orange1][b]{} warnings[/b][/orange1], and [white][b]{} recommendations[/b][/white]'.format(
             insights_total[HIGH],
@@ -993,7 +1152,7 @@ if insights_operation:
 
 console.print(
     Panel(
-        ' {} | [white]LBL[/white] | [white]I/O Insights report generated at {} in[/white] {:.3f} seconds'.format(
+        ' {} | [white]LBL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
             datetime.datetime.now().year,
             datetime.datetime.now(),
             insights_end_time - insights_start_time
@@ -1012,6 +1171,9 @@ if args.export_html:
 if args.export_svg:
     console.save_svg(
         'io-insights.svg',
-        theme=MONOKAI
+        title='Drishti',
+        theme=MONOKAI,
+        clear=False
     )
 
+#if args.export_csv:

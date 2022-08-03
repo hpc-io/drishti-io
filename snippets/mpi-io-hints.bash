@@ -15,11 +15,12 @@ export MPICH_MPIIO_HINTS="*:cb_nodes=16:cb_buffer_size=16777216:romio_cb_write=e
 export MPICH_MPIIO_HINTS_DISPLAY=1
 
 # ------------------------------- #
-# OpenMPI / SpectrumMPI           #
+# OpenMPI / SpectrumMPI (Summit)  #
 # ------------------------------- #
 export OMPI_MCA_io=romio321
 export ROMIO_HINTS=./my-romio-hints
 
+# the my-romio-hints file content is as follows:
 cat $ROMIO_HINTS
 
 romio_cb_write enable
