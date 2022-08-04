@@ -1,5 +1,6 @@
 import os
 import sys
+import csv
 import time
 import datetime
 import argparse
@@ -140,8 +141,18 @@ parser.add_argument(
     help='Display the full file path for the files that triggered the issue'
 )
 
+parser.add_argument(
+    '--csv',
+    default=False,
+    action='store_true',
+    dest='export_csv',
+    help='Export a CSV with the code of all issues that were triggered'
+)
+
 args = parser.parse_args()
 
+
+csv_report = []
 
 def validate_thresholds():
     """
@@ -212,6 +223,9 @@ def message(code, target, level, issue, recommendations=None, details=None):
             issue
         )
     ]
+
+    if args.export_csv:
+        csv_report.append(code)
 
     if details:
         for detail in details:
@@ -1280,4 +1294,45 @@ if args.export_svg:
         clear=False
     )
 
-#if args.export_csv:
+if args.export_csv:
+    issues = [
+        'JOB',
+        INSIGHTS_STDIO_HIGH_USAGE,
+        INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE,
+        INSIGHTS_POSIX_READ_COUNT_INTENSIVE,
+        INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE,
+        INSIGHTS_POSIX_READ_SIZE_INTENSIVE,
+        INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE,
+        INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE,
+        INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE,
+        INSIGHTS_POSIX_REDUNDANT_READ_USAGE,
+        INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE,
+        INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE,
+        INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE,
+        INSIGHTS_POSIX_HIGH_METADATA_TIME,
+        INSIGHTS_POSIX_SIZE_IMBALANCE,
+        INSIGHTS_POSIX_TIME_IMBALANCE,
+        INSIGHTS_MPI_IO_NO_USAGE,
+        INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE,
+        INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE,
+        INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE,
+        INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
+        INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
+        INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
+        INSIGHTS_MPI_IO_AGGREGATORS
+    ]
+
+    detected_issues = dict.fromkeys(issues, False)
+    detected_issues['JOB'] = job['job']['jobid']
+
+    for report in csv_report:
+        detected_issues[report] = True
+
+    with open('summary.csv', 'w') as f:
+        w = csv.writer(f)
+        w.writerow(detected_issues.keys())
