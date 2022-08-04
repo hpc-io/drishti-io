@@ -47,6 +47,7 @@ THRESHOLD_METADATA_TIME_RANK = 30  # seconds
 THRESHOLD_RANDOM_OPERATIONS = 0.2
 THRESHOLD_STRAGGLERS = 0.15
 THRESHOLD_INTERFACE_STDIO = 0.1
+THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
 
 NUMBER_OF_COMPUTE_NODES = 32
 
@@ -129,6 +130,14 @@ parser.add_argument(
     action='store_true',
     dest='code',
     help='Display insights identification code'
+)
+
+parser.add_argument(
+    '--path',
+    default=False,
+    action='store_true',
+    dest='full_path',
+    help='Display the full file path for the files that triggered the issue'
 )
 
 args = parser.parse_args()
@@ -494,10 +503,10 @@ if 'POSIX' in report.records:
             if row['total'] > (total_reads * THRESHOLD_SMALL_REQUESTS / 2):
                 detail.append(
                     {
-                        'message': '{} ({:.2f}%) small read requests are to {}'.format(
+                        'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
                             row['total'],
                             row['total'] / total_reads * 100.0,
-                            file_map[int(row['id'])]
+                            file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
                         ) 
                     }
                 )
@@ -541,10 +550,10 @@ if 'POSIX' in report.records:
             if row['total'] > (total_writes * THRESHOLD_SMALL_REQUESTS / 2):
                 detail.append(
                     {
-                        'message': '{} ({:.2f}%) small write requests are to {}'.format(
+                        'message': '{} ({:.2f}%) small write requests are to "{}"'.format(
                             row['total'],
                             row['total'] / total_writes * 100.0,
-                            file_map[int(row['id'])]
+                            file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
                         ) 
                     }
                 )
@@ -752,14 +761,32 @@ if 'POSIX' in report.records:
 
     shared_files = df['counters'].loc[(df['counters']['rank'] == -1)]
 
+    shared_files = shared_files.assign(id=lambda d: d['id'].astype(str))
+
     if not shared_files.empty:
         total_shared_reads = shared_files['POSIX_READS'].sum()
         total_shared_reads_small = shared_files['POSIX_SIZE_READ_0_100'].sum() + shared_files['POSIX_SIZE_READ_1K_10K'].sum() + shared_files['POSIX_SIZE_READ_100K_1M'].sum()
+
+        shared_files['INSIGHTS_POSIX_SMALL_READS'] = shared_files['POSIX_SIZE_READ_0_100'] + shared_files['POSIX_SIZE_READ_1K_10K'] + shared_files['POSIX_SIZE_READ_100K_1M']
 
         if total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS:
             issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
                 total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
             )
+
+            detail = []
+
+            for index, row in shared_files.iterrows():
+                if row['INSIGHTS_POSIX_SMALL_READS'] > (total_shared_reads * THRESHOLD_SMALL_REQUESTS / 2):
+                    detail.append(
+                        {
+                            'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
+                                row['INSIGHTS_POSIX_SMALL_READS'],
+                                row['INSIGHTS_POSIX_SMALL_READS'] / total_shared_reads * 100.0,
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
             recommendation = [
                 {
@@ -769,16 +796,32 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
         total_shared_writes = shared_files['POSIX_WRITES'].sum()
         total_shared_writes_small = shared_files['POSIX_SIZE_WRITE_0_100'].sum() + shared_files['POSIX_SIZE_WRITE_1K_10K'].sum() + shared_files['POSIX_SIZE_WRITE_100K_1M'].sum()
 
+        shared_files['INSIGHTS_POSIX_SMALL_WRITES'] = shared_files['POSIX_SIZE_WRITE_0_100'] + shared_files['POSIX_SIZE_WRITE_1K_10K'] + shared_files['POSIX_SIZE_WRITE_100K_1M']
+
         if total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS:
             issue = 'Application issues a high number ({}) of small write requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file write requests'.format(
                 total_shared_writes_small, total_shared_writes_small / total_shared_writes * 100.0
             )
+
+            detail = []
+
+            for index, row in shared_files.iterrows():
+                if row['INSIGHTS_POSIX_SMALL_WRITES'] > (total_shared_writes * THRESHOLD_SMALL_REQUESTS / 2):
+                    detail.append(
+                        {
+                            'message': '{} ({:.2f}%) small writes requests are to "{}"'.format(
+                                row['INSIGHTS_POSIX_SMALL_WRITES'],
+                                row['INSIGHTS_POSIX_SMALL_WRITES'] / total_shared_writes * 100.0,
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
             recommendation = [
                 {
@@ -788,7 +831,7 @@ if 'POSIX' in report.records:
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
     #########################################################################################################################################################################
@@ -831,19 +874,19 @@ if 'POSIX' in report.records:
 
     stragglers_count = 0
 
-    shared_files['id'] = shared_files['id'].astype(str)
+    shared_files = shared_files.assign(id=lambda d: d['id'].astype(str))
 
     # Get the files responsible
     detected_files = []
 
     for index, row in shared_files.iterrows():
         total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
-        print(row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ'], row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES'])
-        if total_transfer_size and (row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > THRESHOLD_STRAGGLERS:
+
+        if total_transfer_size and abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > THRESHOLD_STRAGGLERS:
             stragglers_count += 1
 
             detected_files.append([
-                row['id'], (row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
+                row['id'], abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
             ])
 
     if stragglers_count:
@@ -856,9 +899,9 @@ if 'POSIX' in report.records:
         for file in detected_files:
             detail.append(
                 {
-                    'message': 'Load imbalance of {:.2f}% detected while accessing {}'.format(
+                    'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
                         file[1],
-                        file_map[int(file[0])]
+                        file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
                     ) 
                 }
             )
@@ -889,16 +932,16 @@ if 'POSIX' in report.records:
     stragglers_count = 0
     stragglers_imbalance = {}
 
-    shared_files_times['id'] = shared_files_times['id'].astype(str)
+    shared_files_times = shared_files_times.assign(id=lambda d: d['id'].astype(str))
 
     for index, row in shared_files_times.iterrows():
-        total_transfer_time = row['POSIX_F_MAX_WRITE_TIME'] + row['POSIX_F_MAX_READ_TIME']
+        total_transfer_time = row['POSIX_F_WRITE_TIME'] + row['POSIX_F_READ_TIME'] + row['POSIX_F_META_TIME']
 
-        if total_transfer_time and (row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > THRESHOLD_STRAGGLERS:
+        if total_transfer_time and abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > THRESHOLD_STRAGGLERS:
             stragglers_count += 1
 
             detected_files.append([
-                row['id'], (row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
+                row['id'], abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
             ])
 
     if stragglers_count:
@@ -913,7 +956,7 @@ if 'POSIX' in report.records:
                 {
                     'message': 'Load imbalance of {:.2f}% detected while accessing {}'.format(
                         file[1],
-                        file_map[int(file[0])]
+                        file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
                     ) 
                 }
             )
@@ -939,18 +982,39 @@ if 'MPI-IO' in report.records:
     # Check if application uses MPI-IO and collective operations
     df_mpiio = report.records['MPI-IO'].to_df()
 
+    df_mpiio['counters'] = df_mpiio['counters'].assign(id=lambda d: d['id'].astype(str))
+
     #print(df_mpiio)
 
-    df_mpiio_collective_reads = df_mpiio['counters'].loc[(df_mpiio['counters']['MPIIO_COLL_READS'] > 0)]
+    # Get the files responsible
+    detected_files = []
+
+    df_mpiio_collective_reads = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_READS'] > 0)]
 
     total_mpiio_read_operations = df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()
 
-    if df_mpiio_collective_reads.empty:
+    if df_mpiio['counters']['MPIIO_COLL_READS'].sum() == 0:
         if total_mpiio_read_operations:
             issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
                 df_mpiio['counters']['MPIIO_INDEP_READS'].sum(),
                 df_mpiio['counters']['MPIIO_INDEP_READS'].sum() / (total_mpiio_read_operations) * 100
             )
+
+            detail = []
+
+            files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
+
+            for index, row in df_mpiio_collective_reads.iterrows():
+                if row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                    detail.append(
+                        {
+                            'message': '{} ({}%) of independent reads to "{}"'.format(
+                                row['MPIIO_INDEP_READS'],
+                                row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100,
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
             recommendation = [
                 {
@@ -960,7 +1024,7 @@ if 'MPI-IO' in report.records:
             ]
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
     else:
         issue = 'Application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
@@ -972,16 +1036,32 @@ if 'MPI-IO' in report.records:
             message(INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, OK, issue)
         )
 
-    df_mpiio_collective_writes = df_mpiio['counters'].loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
+    df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
     total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
 
-    if df_mpiio_collective_writes.empty:
+    if df_mpiio['counters']['MPIIO_COLL_WRITES'].sum() == 0:
         if total_mpiio_write_operations:
             issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
                 df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum(),
                 df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() / (total_mpiio_write_operations) * 100
             )
+
+            detail = []
+
+            files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
+
+            for index, row in df_mpiio_collective_writes.iterrows():
+                if row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                    detail.append(
+                        {
+                            'message': '{} ({}%) independent writes to "{}"'.format(
+                                row['MPIIO_INDEP_WRITES'],
+                                row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100,
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
             recommendation = [
                 {
@@ -991,7 +1071,7 @@ if 'MPI-IO' in report.records:
             ]
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
     else:
         issue = 'Application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
