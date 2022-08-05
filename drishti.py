@@ -1333,6 +1333,10 @@ if args.export_csv:
     for report in csv_report:
         detected_issues[report] = True
 
-    with open('summary.csv', 'w') as f:
+    filename = '{}-summary.csv'.format(
+        os.path.basename(args.darshan).replace('.darshan', '')
+    )
+
+    with open(filename, 'w') as f:
         w = csv.writer(f)
         w.writerow(detected_issues.keys())
