@@ -625,7 +625,7 @@ if 'POSIX' in report.records:
     total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
     total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-    if total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
+    if total_operations and total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
         issue = 'Application has a high number ({:.2f}%) of misaligned memory requests'.format(
             total_mem_not_aligned / total_operations * 100.0
         )
@@ -634,7 +634,7 @@ if 'POSIX' in report.records:
             message(INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
         )
 
-    if total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
+    if total_operations and total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
         issue = 'Application issues a high number ({:.2f}%) of misaligned file requests'.format(
             total_file_not_aligned / total_operations * 100.0
         )
