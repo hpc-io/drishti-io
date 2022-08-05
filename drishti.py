@@ -424,7 +424,7 @@ for id, path in file_map.items():
 
 df_posix_files = df_posix
 
-if total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
+if total_size and total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
     issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
         total_size_stdio / total_size * 100.0,
         convert_bytes(total_size_stdio)
