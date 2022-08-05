@@ -472,7 +472,7 @@ if 'POSIX' in report.records:
     total_operations = total_writes + total_reads 
 
     # To check whether the application is write-intersive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
-    if total_writes > total_reads and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
+    if total_writes > total_reads and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
         issue = 'Application is write operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
             total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
         )
@@ -481,7 +481,7 @@ if 'POSIX' in report.records:
             message(INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
-    if total_reads > total_writes and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
+    if total_reads > total_writes and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
         issue = 'Application is read operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
             total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
         )
@@ -805,7 +805,7 @@ if 'POSIX' in report.records:
 
         shared_files['INSIGHTS_POSIX_SMALL_READS'] = shared_files['POSIX_SIZE_READ_0_100'] + shared_files['POSIX_SIZE_READ_1K_10K'] + shared_files['POSIX_SIZE_READ_100K_1M']
 
-        if total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS:
+        if total_shared_reads and total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS:
             issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
                 total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
             )
@@ -840,7 +840,7 @@ if 'POSIX' in report.records:
 
         shared_files['INSIGHTS_POSIX_SMALL_WRITES'] = shared_files['POSIX_SIZE_WRITE_0_100'] + shared_files['POSIX_SIZE_WRITE_1K_10K'] + shared_files['POSIX_SIZE_WRITE_100K_1M']
 
-        if total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS:
+        if total_shared_writes and total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS:
             issue = 'Application issues a high number ({}) of small write requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file write requests'.format(
                 total_shared_writes_small, total_shared_writes_small / total_shared_writes * 100.0
             )
@@ -990,7 +990,7 @@ if 'POSIX' in report.records:
         for file in detected_files:
             detail.append(
                 {
-                    'message': 'Load imbalance of {:.2f}% detected while accessing {}'.format(
+                    'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
                         file[1],
                         file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
                     ) 
