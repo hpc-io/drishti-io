@@ -1041,7 +1041,7 @@ if 'MPI-IO' in report.records:
             files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
 
             for index, row in df_mpiio_collective_reads.iterrows():
-                if row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
                     detail.append(
                         {
                             'message': '{} ({}%) of independent reads to "{}"'.format(
@@ -1088,7 +1088,7 @@ if 'MPI-IO' in report.records:
             files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
             for index, row in df_mpiio_collective_writes.iterrows():
-                if row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
                     detail.append(
                         {
                             'message': '{} ({}%) independent writes to "{}"'.format(
