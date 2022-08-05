@@ -329,9 +329,10 @@ job = report.metadata
 #########################################################################################################################################################################
 
 # Check usage of STDIO, POSIX, and MPI-IO per file
-df_stdio = report.records['STDIO'].to_df()
 
 if 'STDIO' in report.records:
+    df_stdio = report.records['STDIO'].to_df()
+
     if df_stdio:
         total_write_size_stdio = df_stdio['counters']['STDIO_BYTES_WRITTEN'].sum()
         total_read_size_stdio = df_stdio['counters']['STDIO_BYTES_READ'].sum()
@@ -340,6 +341,8 @@ if 'STDIO' in report.records:
     else:
         total_size_stdio = 0
 else:
+    df_stdio = None
+
     total_size_stdio = 0
 
 if 'POSIX' in report.records:
@@ -353,6 +356,8 @@ if 'POSIX' in report.records:
     else:
         total_size_posix = 0
 else:
+    df_posix = None
+
     total_size_posix = 0
 
 if 'MPI-IO' in report.records:
@@ -366,6 +371,8 @@ if 'MPI-IO' in report.records:
     else:
         total_size_mpiio = 0
 else:
+    df_mpiio = None
+
     total_size_mpiio = 0
 
 # Since POSIX will capture both POSIX-only accesses and those comming from MPI-IO, we can subtract those
@@ -389,9 +396,20 @@ total_files_posix = 0
 total_files_mpiio = 0
 
 for id, path in file_map.items():
-    uses_stdio = len(df_stdio['counters'][(df_stdio['counters']['id'] == id)]) > 0
-    uses_posix = len(df_posix['counters'][(df_posix['counters']['id'] == id)]) > 0
-    uses_mpiio = len(df_mpiio['counters'][(df_mpiio['counters']['id'] == id)]) > 0
+    if df_stdio:
+        uses_stdio = len(df_stdio['counters'][(df_stdio['counters']['id'] == id)]) > 0
+    else:
+        uses_stdio = 0
+    
+    if df_posix:
+        uses_posix = len(df_posix['counters'][(df_posix['counters']['id'] == id)]) > 0
+    else:
+        uses_posix = 0
+
+    if df_mpiio:
+        uses_mpiio = len(df_mpiio['counters'][(df_mpiio['counters']['id'] == id)]) > 0
+    else:
+        uses_mpiio = 0
 
     total_files_stdio += uses_stdio
     total_files_posix += uses_posix
@@ -412,7 +430,11 @@ if total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
         convert_bytes(total_size_stdio)
     )
 
-    recommendation = 'Consider switching to a high-performance I/O interface such as MPI-IO'
+    recommendation = [
+        {
+            'message': 'Consider switching to a high-performance I/O interface such as MPI-IO'
+        }
+    ]
 
     insights_operation.append(
         message(INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
