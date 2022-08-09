@@ -1,9 +1,12 @@
 import os
+import io
 import sys
 import csv
 import time
+import shlex
 import datetime
 import argparse
+import subprocess
 
 import pandas as pd
 
@@ -19,7 +22,7 @@ from rich.panel import Panel
 from rich.terminal_theme import MONOKAI
 from subprocess import call
 
-console = Console(record=True, width=100)
+console = Console(record=True)
 
 RECOMMENDATIONS = 0
 HIGH = 1
@@ -50,7 +53,7 @@ THRESHOLD_STRAGGLERS = 0.15
 THRESHOLD_INTERFACE_STDIO = 0.1
 THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
 
-NUMBER_OF_COMPUTE_NODES = 32
+NUMBER_OF_COMPUTE_NODES = 0
 
 INSIGHTS_STDIO_HIGH_USAGE = 'S01'
 INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
@@ -79,7 +82,9 @@ INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE = 'M04'
 INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE = 'M05'
 INSIGHTS_MPI_IO_BLOCKING_READ_USAGE = 'M06'
 INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE = 'M07'
-INSIGHTS_MPI_IO_AGGREGATORS = 'M08'
+INSIGHTS_MPI_IO_AGGREGATORS_INTRA = 'M08'
+INSIGHTS_MPI_IO_AGGREGATORS_INTER = 'M09'
+INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
 
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
@@ -1197,22 +1202,71 @@ for hint in hints:
     if key == 'cb_nodes':
         cb_nodes = value
 
-# Do we have one MPI-IO aggregator per node?
-if cb_nodes != NUMBER_OF_COMPUTE_NODES:
-    issue = 'Application is using inter-node aggregators (which require network communication)'
+# Try to get the number of compute nodes from SLURM, if not found, set as information
+command = 'sacct --job {} --format=JobID,JobIDRaw,NNodes,NCPUs --parsable2 --delimiter ","'.format(
+    job['job']['jobid']
+)
 
-    recommendation = [
-        {
-            'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
-                NUMBER_OF_COMPUTE_NODES
-            ),
-            'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
-        }
-    ]
+arguments = shlex.split(command)
 
-    insights_operation.append(
-        message(INSIGHTS_MPI_IO_AGGREGATORS, TARGET_USER, WARN, issue, recommendation)
-    )
+try:
+    result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if result.returncode == 0:
+        # We have successfully fetched the information from SLURM
+        db = csv.DictReader(io.StringIO(result.stdout.decode('utf-8')))
+
+        try:
+            first = next(db)
+
+            if 'NNodes' in first:
+                NUMBER_OF_COMPUTE_NODES = first['NNodes']
+
+                # Do we have one MPI-IO aggregator per node?
+                if cb_nodes > NUMBER_OF_COMPUTE_NODES:
+                    issue = 'Application is using inter-node aggregators (which require network communication)'
+
+                    recommendation = [
+                        {
+                            'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
+                                NUMBER_OF_COMPUTE_NODES
+                            ),
+                            'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
+                        }
+                    ]
+
+                    insights_operation.append(
+                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
+                    )
+
+                if cb_nodes < NUMBER_OF_COMPUTE_NODES:
+                    issue = 'Application is using intra-node aggregators'
+
+                    recommendation = [
+                        {
+                            'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
+                                NUMBER_OF_COMPUTE_NODES
+                            ),
+                            'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
+                        }
+                    ]
+
+                    insights_operation.append(
+                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, HIGH, issue, recommendation)
+                    )
+
+                if cb_nodes == NUMBER_OF_COMPUTE_NODES:
+                    issue = 'Application is using one aggregator per compute node'
+
+                    insights_operation.append(
+                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
+                    )
+
+
+        except StopIteration:
+            pass
+except FileNotFoundError:
+    pass
 
 #########################################################################################################################################################################
 
@@ -1246,8 +1300,12 @@ console.print(
                 total_files_posix - total_files_mpiio,  # Since MPI-IO files will always use POSIX, we can decrement to get a unique count
                 total_files_mpiio
             ),
+            ' [b]COMPUTE NODES[/b]   [white]{}[/white]'.format(
+                NUMBER_OF_COMPUTE_NODES
+            ),
             ' [b]PROCESSES[/b]       [white]{}[/white]'.format(
-                job['job']['nprocs']),
+                job['job']['nprocs']
+            ),
             ' [b]HINTS[/b]:          [white]{}[/white]'.format(
                 ' '.join(hints)
             )
@@ -1346,6 +1404,7 @@ if args.export_csv:
         INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
         INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
         INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
+        INSIGHTS_MPI_IO_AGGREGATORS_INFO,
         INSIGHTS_MPI_IO_AGGREGATORS
     ]
 
