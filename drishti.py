@@ -19,7 +19,7 @@ from rich.panel import Panel
 from rich.terminal_theme import MONOKAI
 from subprocess import call
 
-console = Console(record=True)
+console = Console(record=True, width=100)
 
 RECOMMENDATIONS = 0
 HIGH = 1
@@ -634,7 +634,7 @@ if 'POSIX' in report.records:
             message(INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
         )
 
-    if total_operations and total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
+    if total_operations and total_file_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
         issue = 'Application issues a high number ({:.2f}%) of misaligned file requests'.format(
             total_file_not_aligned / total_operations * 100.0
         )
@@ -701,7 +701,7 @@ if 'POSIX' in report.records:
     max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
 
     if max_read_offset > total_read_size:
-        issue = 'Application might have redundant read traffic (more data was read than the highest read offset)'
+        issue = 'Application might have redundant read traffic (more data read than the highest offset)'
 
         insights_metadata.append(
             message(INSIGHTS_POSIX_REDUNDANT_READ_USAGE, TARGET_DEVELOPER, WARN, issue, None)
@@ -710,7 +710,7 @@ if 'POSIX' in report.records:
     max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
     if max_write_offset > total_written_size:
-        issue = 'Application might have redundant write traffic (more data was written than the highest write offset)'
+        issue = 'Application might have redundant write traffic (more data written than the highest offset)'
 
         insights_metadata.append(
             message(INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, None)
@@ -1233,7 +1233,7 @@ console.print(
                 job['exe'].split()[0]
             ),
             ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
-                args.darshan
+                os.path.basename(args.darshan)
             ),
             ' [b]EXECUTION DATE[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                 job_start,
