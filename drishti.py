@@ -1259,7 +1259,7 @@ try:
                     issue = 'Application is using one aggregator per compute node'
 
                     insights_operation.append(
-                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
+                        message(INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
                     )
 
 
@@ -1404,8 +1404,9 @@ if args.export_csv:
         INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
         INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
         INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
-        INSIGHTS_MPI_IO_AGGREGATORS_INFO,
-        INSIGHTS_MPI_IO_AGGREGATORS
+        INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
+        INSIGHTS_MPI_IO_AGGREGATORS_INTER,
+        INSIGHTS_MPI_IO_AGGREGATORS_OK
     ]
 
     detected_issues = dict.fromkeys(issues, False)
