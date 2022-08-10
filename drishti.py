@@ -1242,17 +1242,8 @@ try:
                 if cb_nodes < NUMBER_OF_COMPUTE_NODES:
                     issue = 'Application is using intra-node aggregators'
 
-                    recommendation = [
-                        {
-                            'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
-                                NUMBER_OF_COMPUTE_NODES
-                            ),
-                            'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
-                        }
-                    ]
-
                     insights_operation.append(
-                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, HIGH, issue, recommendation)
+                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
                     )
 
                 if cb_nodes == NUMBER_OF_COMPUTE_NODES:
