@@ -22,7 +22,7 @@ from rich.panel import Panel
 from rich.terminal_theme import MONOKAI
 from subprocess import call
 
-console = Console(record=True)
+console = Console(record=True, width=100)
 
 RECOMMENDATIONS = 0
 HIGH = 1
@@ -50,6 +50,7 @@ THRESHOLD_METADATA = 0.1
 THRESHOLD_METADATA_TIME_RANK = 30  # seconds
 THRESHOLD_RANDOM_OPERATIONS = 0.2
 THRESHOLD_STRAGGLERS = 0.15
+THRESHOLD_IMBALANCE = 0.30
 THRESHOLD_INTERFACE_STDIO = 0.1
 THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
 
@@ -75,6 +76,8 @@ INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE = 'P16'
 INSIGHTS_POSIX_HIGH_METADATA_TIME = 'P17'
 INSIGHTS_POSIX_SIZE_IMBALANCE = 'P18'
 INSIGHTS_POSIX_TIME_IMBALANCE = 'P19'
+INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE = 'P21'
+INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE = 'P22'
 INSIGHTS_MPI_IO_NO_USAGE = 'M01'
 INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE = 'M02'
 INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE = 'M03'
@@ -664,7 +667,7 @@ if 'POSIX' in report.records:
         if 'LUSTRE' in modules:
             recommendation.append(
                 {
-                    'message': 'Since the application is accessing Lustre, consider using an alignment that matches the file system stripe configuration',
+                    'message': 'Consider using a Lustre alignment that matches the file system stripe configuration',
                     'sample': Syntax.from_path('snippets/lustre-striping.bash', line_numbers=True, background_color='default')
                 }
             )
@@ -673,32 +676,6 @@ if 'POSIX' in report.records:
             message(INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
-    #########################################################################################################################################################################
-
-    #print(df['counters']['POSIX_MAX_BYTE_READ'] / df['counters']['POSIX_BYTES_READ'])
-    #print(df['counters']['POSIX_MAX_BYTE_WRITTEN'] / df['counters']['POSIX_BYTES_WRITTEN'])
-
-    #print(df['counters']['POSIX_MAX_BYTE_READ'].sum())
-    #print(df['counters']['POSIX_BYTES_READ'].sum())
-
-    #print(df['counters']['POSIX_MAX_BYTE_WRITTEN'].sum())
-    #print(df['counters']['POSIX_BYTES_WRITTEN'].sum())
-
-    #print(df['counters']['POSIX_STRIDE1_STRIDE'])
-
-    #df_lustre = report.records['LUSTRE'].to_df()
-    #print(df_lustre)
-
-    # TODO: rank imabalance
-
-
-
-    # Get the total transfer size of rank 0
-
-    # Get the total transfer size for each rank
-
-    #print(df['counters'])
-    #exit()
     #########################################################################################################################################################################
 
     # Redundant read-traffic (based on Phill)
@@ -1016,6 +993,120 @@ if 'POSIX' in report.records:
             message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
         )
 
+    aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
+        ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
+    ].replace(
+        0, None
+    ).groupby('id', as_index=False).agg({
+        'rank': 'nunique',
+        'POSIX_BYTES_WRITTEN': ['sum', 'min', 'max'],
+        'POSIX_BYTES_READ': ['sum', 'min', 'max']
+    })
+
+    aggregated.columns = list(map('_'.join, aggregated.columns.values))
+
+    aggregated = aggregated.assign(id=lambda d: d['id_'].astype(str))
+
+    # Get the files responsible
+    imbalance_count = 0
+
+    detected_files = []
+
+    for index, row in aggregated.iterrows():
+        if row['POSIX_BYTES_WRITTEN_max'] and abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] > THRESHOLD_IMBALANCE:
+            imbalance_count += 1
+
+            detected_files.append([
+                row['id'], abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] * 100
+            ])
+
+    if imbalance_count:
+        issue = 'We detected write imbalance when accessing {} individual files'.format(
+            imbalance_count
+        )
+
+        detail = []
+        
+        for file in detected_files:
+            detail.append(
+                {
+                    'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
+                        file[1],
+                        file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
+                    ) 
+                }
+            )
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning the stripe size and count to better distribute the data',
+                'sample': Syntax.from_path('snippets/lustre-striping.bash', line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
+                'sample': Syntax.from_path('snippets/pnetcdf-hdf5-no-fill.c', line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+        )
+
+    imbalance_count = 0
+
+    detected_files = []
+
+    for index, row in aggregated.iterrows():
+        if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] > THRESHOLD_IMBALANCE:
+            imbalance_count += 1
+
+            detected_files.append([
+                row['id'], abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] * 100
+            ])
+
+    if imbalance_count:
+        issue = 'We detected read imbalance when accessing {} individual files.'.format(
+            imbalance_count
+        )
+
+        detail = []
+        
+        for file in detected_files:
+            detail.append(
+                {
+                    'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
+                        file[1],
+                        file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
+                    ) 
+                }
+            )
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning the stripe size and count to better distribute the data',
+                'sample': Syntax.from_path('snippets/lustre-striping.bash', line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
+                'sample': Syntax.from_path('snippets/pnetcdf-hdf5-no-fill.c', line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+        )
 
 #########################################################################################################################################################################
 
@@ -1144,7 +1235,7 @@ if 'MPI-IO' in report.records:
         if 'MPI-IO' in modules:
             recommendation.append(
                 {
-                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
+                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations', # (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
                     'sample': Syntax.from_path('snippets/mpi-io-iread.c', line_numbers=True, background_color='default')
                 }
             )
@@ -1169,7 +1260,7 @@ if 'MPI-IO' in report.records:
         if 'MPI-IO' in modules:
             recommendation.append(
                 {
-                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
+                    'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations',  # (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
                     'sample': Syntax.from_path('snippets/mpi-io-iwrite.c', line_numbers=True, background_color='default')
                 }
             )
@@ -1194,70 +1285,71 @@ if 'h' in job['job']['metadata']:
 
 #########################################################################################################################################################################
 
-cb_nodes = None
+if 'MPI-IO' in modules:
+    cb_nodes = None
 
-for hint in hints:
-    (key, value) = hint.split('=')
-    
-    if key == 'cb_nodes':
-        cb_nodes = value
+    for hint in hints:
+        (key, value) = hint.split('=')
+        
+        if key == 'cb_nodes':
+            cb_nodes = value
 
-# Try to get the number of compute nodes from SLURM, if not found, set as information
-command = 'sacct --job {} --format=JobID,JobIDRaw,NNodes,NCPUs --parsable2 --delimiter ","'.format(
-    job['job']['jobid']
-)
+    # Try to get the number of compute nodes from SLURM, if not found, set as information
+    command = 'sacct --job {} --format=JobID,JobIDRaw,NNodes,NCPUs --parsable2 --delimiter ","'.format(
+        job['job']['jobid']
+    )
 
-arguments = shlex.split(command)
+    arguments = shlex.split(command)
 
-try:
-    result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    if result.returncode == 0:
-        # We have successfully fetched the information from SLURM
-        db = csv.DictReader(io.StringIO(result.stdout.decode('utf-8')))
+        if result.returncode == 0:
+            # We have successfully fetched the information from SLURM
+            db = csv.DictReader(io.StringIO(result.stdout.decode('utf-8')))
 
-        try:
-            first = next(db)
+            try:
+                first = next(db)
 
-            if 'NNodes' in first:
-                NUMBER_OF_COMPUTE_NODES = first['NNodes']
+                if 'NNodes' in first:
+                    NUMBER_OF_COMPUTE_NODES = first['NNodes']
 
-                # Do we have one MPI-IO aggregator per node?
-                if cb_nodes > NUMBER_OF_COMPUTE_NODES:
-                    issue = 'Application is using inter-node aggregators (which require network communication)'
+                    # Do we have one MPI-IO aggregator per node?
+                    if cb_nodes > NUMBER_OF_COMPUTE_NODES:
+                        issue = 'Application is using inter-node aggregators (which require network communication)'
 
-                    recommendation = [
-                        {
-                            'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
-                                NUMBER_OF_COMPUTE_NODES
-                            ),
-                            'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
-                        }
-                    ]
+                        recommendation = [
+                            {
+                                'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
+                                    NUMBER_OF_COMPUTE_NODES
+                                ),
+                                'sample': Syntax.from_path('snippets/mpi-io-hints.bash', line_numbers=True, background_color='default')
+                            }
+                        ]
 
-                    insights_operation.append(
-                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
-                    )
+                        insights_operation.append(
+                            message(INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
+                        )
 
-                if cb_nodes < NUMBER_OF_COMPUTE_NODES:
-                    issue = 'Application is using intra-node aggregators'
+                    if cb_nodes < NUMBER_OF_COMPUTE_NODES:
+                        issue = 'Application is using intra-node aggregators'
 
-                    insights_operation.append(
-                        message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
-                    )
+                        insights_operation.append(
+                            message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
+                        )
 
-                if cb_nodes == NUMBER_OF_COMPUTE_NODES:
-                    issue = 'Application is using one aggregator per compute node'
+                    if cb_nodes == NUMBER_OF_COMPUTE_NODES:
+                        issue = 'Application is using one aggregator per compute node'
 
-                    insights_operation.append(
-                        message(INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
-                    )
+                        insights_operation.append(
+                            message(INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
+                        )
 
 
-        except StopIteration:
-            pass
-except FileNotFoundError:
-    pass
+            except StopIteration:
+                pass
+    except FileNotFoundError:
+        pass
 
 #########################################################################################################################################################################
 
@@ -1352,14 +1444,14 @@ console.print(
 
 if args.export_html:
     console.save_html(
-        'io-insights.html',
+        '{}.html'.format(args.darshan),
         theme=MONOKAI,
         clear=False
     )
 
 if args.export_svg:
     console.save_svg(
-        'io-insights.svg',
+        '{}.svg'.format(args.darshan),
         title='Drishti',
         theme=MONOKAI,
         clear=False
@@ -1388,6 +1480,8 @@ if args.export_csv:
         INSIGHTS_POSIX_HIGH_METADATA_TIME,
         INSIGHTS_POSIX_SIZE_IMBALANCE,
         INSIGHTS_POSIX_TIME_IMBALANCE,
+        INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE,
+        INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE,
         INSIGHTS_MPI_IO_NO_USAGE,
         INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE,
         INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE,
