@@ -871,7 +871,7 @@ def main():
                 ])
 
         if stragglers_count:
-            issue = 'We detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
+            issue = 'Detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
                 stragglers_count
             )
 
@@ -926,7 +926,7 @@ def main():
                 ])
 
         if stragglers_count:
-            issue = 'We detected time imbalance caused by stragglers when accessing {} shared file.'.format(
+            issue = 'Detected time imbalance caused by stragglers when accessing {} shared file.'.format(
                 stragglers_count
             )
 
@@ -984,7 +984,7 @@ def main():
                 ])
 
         if imbalance_count:
-            issue = 'We detected write imbalance when accessing {} individual files'.format(
+            issue = 'Detected write imbalance when accessing {} individual files'.format(
                 imbalance_count
             )
 
@@ -1034,7 +1034,7 @@ def main():
                 ])
 
         if imbalance_count:
-            issue = 'We detected read imbalance when accessing {} individual files.'.format(
+            issue = 'Detected read imbalance when accessing {} individual files.'.format(
                 imbalance_count
             )
 
