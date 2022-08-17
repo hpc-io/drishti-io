@@ -8,6 +8,7 @@ To install Drishti, make sure you have Python 3 and first install the dependenci
 
 ```
 pip install -r requirements.txt
+pip install .
 ```
 
 You can then run Drishti with the following options:
@@ -27,6 +28,27 @@ optional arguments:
   --svg       Export the report as an SVG image
   --verbose   Display extended details for the recommendations
   --code      Display insights identification code
+```
+
+You can also use our Docker image:
+
+```
+docker run --rm --mount type=bind,source="$(PWD)",target=/drishti drishti sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+```
+
+
+You can also use a Docker image already pre-configured with all dependencies to run Drishti:
+
+```
+docker pull hpcio/drishti
+```
+
+Since we need to provide a Darshan log file as input, make sure you are mounting your current directory in the container and removing the container after using it. You can pass the same arguments described above, after the container name (drishti).
+
+```
+docker run --rm --mount \
+    type=bind,source="$(PWD)",target="/drishti" \
+    drishti <FILE>.darshan
 ```
 
 By default Drishti will generate an overview report in the console with recommendations:
