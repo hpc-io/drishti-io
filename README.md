@@ -71,7 +71,7 @@ You can also enable the verbose mode with `--verbose` to visualize solution snip
 
 ---
 
-*** Copyright Notice ***
+### Copyright Notice
 
 Drishti Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy). All rights reserved.
 
