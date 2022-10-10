@@ -49,14 +49,17 @@ insights_total[RECOMMENDATIONS] = 0
 
 THRESHOLD_OPERATION_IMBALANCE = 0.1
 THRESHOLD_SMALL_REQUESTS = 0.1
+THRESHOLD_SMALL_REQUESTS_ABSOLUTE = 1000
 THRESHOLD_MISALIGNED_REQUESTS = 0.1
 THRESHOLD_METADATA = 0.1
 THRESHOLD_METADATA_TIME_RANK = 30  # seconds
 THRESHOLD_RANDOM_OPERATIONS = 0.2
+THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE = 1000
 THRESHOLD_STRAGGLERS = 0.15
 THRESHOLD_IMBALANCE = 0.30
 THRESHOLD_INTERFACE_STDIO = 0.1
 THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
+THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE = 1000
 
 INSIGHTS_STDIO_HIGH_USAGE = 'S01'
 INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
@@ -487,18 +490,35 @@ def main():
         #########################################################################################################################################################################
 
         # Get the number of small I/O operations (less than 1 MB)
-        total_reads_small = df['counters']['POSIX_SIZE_READ_0_100'].sum() + df['counters']['POSIX_SIZE_READ_1K_10K'].sum() + df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
+        total_reads_small = (
+            df['counters']['POSIX_SIZE_READ_0_100'].sum() +
+            df['counters']['POSIX_SIZE_READ_100_1K'].sum() +
+            df['counters']['POSIX_SIZE_READ_1K_10K'].sum() +
+            df['counters']['POSIX_SIZE_READ_10K_100K'].sum() +
+            df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
+        )
 
         # Get the files responsible for more than half of these accesses
         files = []
 
-        df['counters']['INSIGHTS_POSIX_SMALL'] = df['counters']['POSIX_SIZE_READ_0_100'] + df['counters']['POSIX_SIZE_READ_1K_10K'] + df['counters']['POSIX_SIZE_READ_100K_1M']
+        df['counters']['INSIGHTS_POSIX_SMALL'] = (
+            df['counters']['POSIX_SIZE_READ_0_100'] +
+            df['counters']['POSIX_SIZE_READ_100_1K'] +
+            df['counters']['POSIX_SIZE_READ_1K_10K'] +
+            df['counters']['POSIX_SIZE_READ_10K_100K'] +
+            df['counters']['POSIX_SIZE_WRITE_100K_1M'] +
+            df['counters']['POSIX_SIZE_WRITE_0_100'] +
+            df['counters']['POSIX_SIZE_WRITE_100_1K'] +
+            df['counters']['POSIX_SIZE_WRITE_1K_10K'] +
+            df['counters']['POSIX_SIZE_WRITE_10K_100K'] +
+            df['counters']['POSIX_SIZE_WRITE_100K_1M']
+        )
 
         detected_files = pd.DataFrame(df['counters'].groupby('id')['INSIGHTS_POSIX_SMALL'].sum()).reset_index()
         detected_files.columns = ['id', 'total']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS:
+        if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS and total_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
             issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
                 total_reads_small, total_reads_small / total_reads * 100.0
             )
@@ -543,9 +563,15 @@ def main():
             )
 
         # Get the number of small I/O operations (less than the stripe size)
-        total_writes_small = df['counters']['POSIX_SIZE_WRITE_0_100'].sum() + df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() + df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
+        total_writes_small = (
+            df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
+        )
 
-        if total_writes_small and total_writes_small / total_writes > THRESHOLD_SMALL_REQUESTS:
+        if total_writes_small and total_writes_small / total_writes > THRESHOLD_SMALL_REQUESTS and total_writes_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
             issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
                 total_writes_small, total_writes_small / total_writes * 100.0
             )
@@ -676,7 +702,7 @@ def main():
         #print('READ Random: {} ({:.2f}%)'.format(read_random, read_random / total_reads * 100))
 
         if total_reads:
-            if read_random and read_random / total_reads > THRESHOLD_RANDOM_OPERATIONS:
+            if read_random and read_random / total_reads > THRESHOLD_RANDOM_OPERATIONS and read_random > THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE:
                 issue = 'Application is issuing a high number ({}) of random read operations ({:.2f}%)'.format(
                     read_random, read_random / total_reads * 100.0
                 )
@@ -711,7 +737,7 @@ def main():
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
         if total_writes:
-            if write_random and write_random / total_writes > THRESHOLD_RANDOM_OPERATIONS:
+            if write_random and write_random / total_writes > THRESHOLD_RANDOM_OPERATIONS and write_random > THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE:
                 issue = 'Application is issuing a high number ({}) of random write operations ({:.2f}%)'.format(
                     write_random, write_random / total_writes * 100.0
                 )
@@ -746,11 +772,23 @@ def main():
 
         if not shared_files.empty:
             total_shared_reads = shared_files['POSIX_READS'].sum()
-            total_shared_reads_small = shared_files['POSIX_SIZE_READ_0_100'].sum() + shared_files['POSIX_SIZE_READ_1K_10K'].sum() + shared_files['POSIX_SIZE_READ_100K_1M'].sum()
+            total_shared_reads_small = (
+                shared_files['POSIX_SIZE_READ_0_100'].sum() +
+                shared_files['POSIX_SIZE_READ_100_1K'].sum() +
+                shared_files['POSIX_SIZE_READ_1K_10K'].sum() +
+                shared_files['POSIX_SIZE_READ_10K_100K'].sum() +
+                shared_files['POSIX_SIZE_READ_100K_1M'].sum()
+            )
 
-            shared_files['INSIGHTS_POSIX_SMALL_READS'] = shared_files['POSIX_SIZE_READ_0_100'] + shared_files['POSIX_SIZE_READ_1K_10K'] + shared_files['POSIX_SIZE_READ_100K_1M']
+            shared_files['INSIGHTS_POSIX_SMALL_READS'] = (
+                shared_files['POSIX_SIZE_READ_0_100'] +
+                shared_files['POSIX_SIZE_READ_100_1K'] +
+                shared_files['POSIX_SIZE_READ_1K_10K'] +
+                shared_files['POSIX_SIZE_READ_10K_100K'] +
+                shared_files['POSIX_SIZE_READ_100K_1M']
+            )
 
-            if total_shared_reads and total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS:
+            if total_shared_reads and total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS and total_shared_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
                 issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
                     total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
                 )
@@ -781,11 +819,23 @@ def main():
                 )
 
             total_shared_writes = shared_files['POSIX_WRITES'].sum()
-            total_shared_writes_small = shared_files['POSIX_SIZE_WRITE_0_100'].sum() + shared_files['POSIX_SIZE_WRITE_1K_10K'].sum() + shared_files['POSIX_SIZE_WRITE_100K_1M'].sum()
+            total_shared_writes_small = (
+                shared_files['POSIX_SIZE_WRITE_0_100'].sum() +
+                shared_files['POSIX_SIZE_WRITE_100_1K'].sum() +
+                shared_files['POSIX_SIZE_WRITE_1K_10K'].sum() +
+                shared_files['POSIX_SIZE_WRITE_10K_100K'].sum() +
+                shared_files['POSIX_SIZE_WRITE_100K_1M'].sum()
+            )
 
-            shared_files['INSIGHTS_POSIX_SMALL_WRITES'] = shared_files['POSIX_SIZE_WRITE_0_100'] + shared_files['POSIX_SIZE_WRITE_1K_10K'] + shared_files['POSIX_SIZE_WRITE_100K_1M']
+            shared_files['INSIGHTS_POSIX_SMALL_WRITES'] = (
+                shared_files['POSIX_SIZE_WRITE_0_100'] +
+                shared_files['POSIX_SIZE_WRITE_100_1K'] +
+                shared_files['POSIX_SIZE_WRITE_1K_10K'] +
+                shared_files['POSIX_SIZE_WRITE_10K_100K'] +
+                shared_files['POSIX_SIZE_WRITE_100K_1M']
+            )
 
-            if total_shared_writes and total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS:
+            if total_shared_writes and total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS and total_shared_writes_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
                 issue = 'Application issues a high number ({}) of small write requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file write requests'.format(
                     total_shared_writes_small, total_shared_writes_small / total_shared_writes * 100.0
                 )
@@ -1089,7 +1139,7 @@ def main():
         total_mpiio_read_operations = df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()
 
         if df_mpiio['counters']['MPIIO_COLL_READS'].sum() == 0:
-            if total_mpiio_read_operations:
+            if total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
                 issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
                     df_mpiio['counters']['MPIIO_INDEP_READS'].sum(),
                     df_mpiio['counters']['MPIIO_INDEP_READS'].sum() / (total_mpiio_read_operations) * 100
@@ -1100,7 +1150,7 @@ def main():
                 files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
 
                 for index, row in df_mpiio_collective_reads.iterrows():
-                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
                         detail.append(
                             {
                                 'message': '{} ({}%) of independent reads to "{}"'.format(
@@ -1136,7 +1186,7 @@ def main():
         total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
 
         if df_mpiio['counters']['MPIIO_COLL_WRITES'].sum() == 0:
-            if total_mpiio_write_operations:
+            if total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
                 issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
                     df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum(),
                     df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() / (total_mpiio_write_operations) * 100
@@ -1147,7 +1197,7 @@ def main():
                 files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
                 for index, row in df_mpiio_collective_writes.iterrows():
-                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS:
+                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
                         detail.append(
                             {
                                 'message': '{} ({}%) independent writes to "{}"'.format(
@@ -1182,12 +1232,20 @@ def main():
 
         # Look for usage of non-block operations
 
+        # Look for HDF5 file extension
+
+        has_hdf5_extension = False
+
+        for index, row in df_mpiio['counters'].iterrows():
+            if file_map[int(row['id'])].endswith('.h5') or file_map[int(row['id'])].endswith('.hdf5'):
+                has_hdf5_extension = True
+
         if df_mpiio['counters']['MPIIO_NB_READS'].sum() == 0:
             issue = 'Application could benefit from non-blocking (asynchronous) reads'
 
             recommendation = []
 
-            if 'H5F' in modules:
+            if 'H5F' in modules or has_hdf5_extension:
                 recommendation.append(
                     {
                         'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
@@ -1212,7 +1270,7 @@ def main():
 
             recommendation = []
 
-            if 'H5F' in modules:
+            if 'H5F' in modules or has_hdf5_extension:
                 recommendation.append(
                     {
                         'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
