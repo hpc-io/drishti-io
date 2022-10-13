@@ -7,9 +7,9 @@ with open("requirements.txt") as f:
     requirements = f.readlines()
 
 setuptools.setup(
-    name="drishti",
+    name="pydrishti",
     keywords="drishti",
-    version="0.3",
+    version="0.4",
     author="Jean Luca Bez, Suren Byna",
     author_email="jlbez@lbl.gov, sbyna@lbl.gov",
     description="",
@@ -19,14 +19,15 @@ setuptools.setup(
     install_requires=[
         'argparse',
         'pandas',
-        'darshan'
+        'darshan',
+        'rich ==12.5.1',
     ],
     packages=[
         'drishti'
     ],
     package_data={
         'drishti': [
-            'snippets/*'
+            'drishti/snippets/*',
         ],
     },
     include_package_data=True,
