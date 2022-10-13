@@ -7,7 +7,7 @@ with open("requirements.txt") as f:
     requirements = f.readlines()
 
 setuptools.setup(
-    name="pydrishti",
+    name="drishti-io",
     keywords="drishti",
     version="0.4",
     author="Jean Luca Bez, Suren Byna",
