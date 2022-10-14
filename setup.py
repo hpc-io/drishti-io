@@ -27,7 +27,7 @@ setuptools.setup(
     ],
     package_data={
         'drishti': [
-            'drishti/snippets/*',
+            'drishti/snippets/*'
         ],
     },
     include_package_data=True,
