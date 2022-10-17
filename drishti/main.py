@@ -24,7 +24,10 @@ from rich.panel import Panel
 from rich.terminal_theme import MONOKAI
 from subprocess import call
 
-console = Console(record=True, width=100)
+from packaging import version
+
+
+console = Console(record=True)
 
 RECOMMENDATIONS = 0
 HIGH = 1
@@ -231,7 +234,7 @@ def message(code, target, level, issue, recommendations=None, details=None):
         color = ''
 
     messages = [
-        ' {}{}{} {}'.format(
+        '{}{}{} {}'.format(
             color,
             icon,
             ' [' + code + ']' if args.code else '',
@@ -244,7 +247,7 @@ def message(code, target, level, issue, recommendations=None, details=None):
 
     if details:
         for detail in details:
-            messages.append('   {}:left_arrow_curving_right: {}'.format(
+            messages.append('  {}:left_arrow_curving_right: {}'.format(
                     color,
                     detail['message']
                 )
@@ -252,10 +255,10 @@ def message(code, target, level, issue, recommendations=None, details=None):
 
     if recommendations:
         if not args.only_issues:
-            messages.append('   [white]:left_arrow_curving_right: [b]Recommendations:[/b]')
+            messages.append('  [white]:left_arrow_curving_right: [b]Recommendations:[/b]')
 
             for recommendation in recommendations:
-                messages.append('     :left_arrow_curving_right: {}'.format(recommendation['message']))
+                messages.append('    :left_arrow_curving_right: {}'.format(recommendation['message']))
 
                 if args.verbose and 'sample' in recommendation:
                     messages.append(
@@ -276,6 +279,40 @@ def message(code, target, level, issue, recommendations=None, details=None):
         *messages
     )
 
+def check_log_version(file, log_version, library_version):
+    use_file = file
+
+    if version.parse(log_version) < version.parse(library_version):
+        use_file = os.path.basename(file.replace('.darshan', '.converted.darshan'))
+
+        console.print(
+            Panel(
+                Padding(
+                    'Converting .darshan log from {} to {}: {}'.format(
+                        log_version,
+                        library_version,
+                        use_file
+                    ),
+                    (1, 1)
+                ),
+                title='{}WARNING'.format('[orange1]'),
+                title_align='left'
+            )
+        )
+
+        if not os.path.isfile(use_file):
+            ret = os.system(
+                'darshan-convert {} {}'.format(
+                    file,
+                    use_file
+                )
+            )
+
+            if ret != 0:
+                print('Unable to convert .darshan file to version {}'.format(library_version))
+
+    return use_file
+
 
 def main():
     if not os.path.isfile(args.darshan):
@@ -292,11 +329,19 @@ def main():
 
     modules = darshanll.log_get_modules(log)
 
+    information = darshanll.log_get_job(log)
+
+    log_version = information['metadata']['lib_ver']
+    library_version = darshanll.darshan.backend.cffi_backend.get_lib_version()
+
+    # Make sure log format is of the same version
+    filename = check_log_version(args.darshan, log_version, library_version)
+ 
     darshanll.log_close(log)
 
     darshan.enable_experimental()
 
-    report = darshan.DarshanReport(args.darshan)
+    report = darshan.DarshanReport(filename)
 
     job = report.metadata
 
@@ -1395,7 +1440,7 @@ def main():
                 ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
                     os.path.basename(args.darshan)
                 ),
-                ' [b]EXECUTION DATE[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
+                ' [b]EXECUTION TIME[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                     job_start,
                     job_end,
                     (job_end - job_start).total_seconds() / 3600
@@ -1433,30 +1478,34 @@ def main():
     if insights_metadata:
         console.print(
             Panel(
-                Group(
-                    *insights_metadata
+                Padding(
+                    Group(
+                        *insights_metadata
+                    ),
+                    (1, 1)
                 ),
                 title='METADATA',
-                title_align='left',
-                padding=1
+                title_align='left'
             )
         )
 
     if insights_operation:
         console.print(
             Panel(
-                Group(
-                    *insights_operation
+                Padding(
+                    Group(
+                        *insights_operation
+                    ),
+                    (1, 1)
                 ),
                 title='OPERATIONS',
-                title_align='left',
-                padding=1
+                title_align='left'
             )
         )
 
     console.print(
         Panel(
-            ' {} | [white]LBL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
+            ' {} | [white]LBNL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
                 datetime.datetime.now().year,
                 datetime.datetime.now(),
                 insights_end_time - insights_start_time
