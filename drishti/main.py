@@ -282,15 +282,14 @@ def message(code, target, level, issue, recommendations=None, details=None):
 def check_log_version(file, log_version, library_version):
     use_file = file
 
-    if version.parse(log_version) < version.parse(library_version):
+    if version.parse(log_version) < version.parse('3.4.0'):
         use_file = os.path.basename(file.replace('.darshan', '.converted.darshan'))
 
         console.print(
             Panel(
                 Padding(
-                    'Converting .darshan log from {} to {}: {}'.format(
+                    'Converting .darshan log from {} to 3.4.0: format: saving output file "{}" in the current working directory.'.format(
                         log_version,
-                        library_version,
                         use_file
                     ),
                     (1, 1)
@@ -1053,9 +1052,7 @@ def main():
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
-        ].replace(
-            0, None
-        ).groupby('id', as_index=False).agg({
+        ].groupby('id', as_index=False).agg({
             'rank': 'nunique',
             'POSIX_BYTES_WRITTEN': ['sum', 'min', 'max'],
             'POSIX_BYTES_READ': ['sum', 'min', 'max']
