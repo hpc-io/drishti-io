@@ -545,12 +545,15 @@ def main():
         # Get the files responsible for more than half of these accesses
         files = []
 
-        df['counters']['INSIGHTS_POSIX_SMALL'] = (
+        df['counters']['INSIGHTS_POSIX_SMALL_READ'] = (
             df['counters']['POSIX_SIZE_READ_0_100'] +
             df['counters']['POSIX_SIZE_READ_100_1K'] +
             df['counters']['POSIX_SIZE_READ_1K_10K'] +
             df['counters']['POSIX_SIZE_READ_10K_100K'] +
-            df['counters']['POSIX_SIZE_WRITE_100K_1M'] +
+            df['counters']['POSIX_SIZE_READ_100K_1M']
+        )
+
+        df['counters']['INSIGHTS_POSIX_SMALL_WRITE'] = (
             df['counters']['POSIX_SIZE_WRITE_0_100'] +
             df['counters']['POSIX_SIZE_WRITE_100_1K'] +
             df['counters']['POSIX_SIZE_WRITE_1K_10K'] +
@@ -558,12 +561,12 @@ def main():
             df['counters']['POSIX_SIZE_WRITE_100K_1M']
         )
 
-        detected_files = pd.DataFrame(df['counters'].groupby('id')['INSIGHTS_POSIX_SMALL'].sum()).reset_index()
-        detected_files.columns = ['id', 'total']
+        detected_files = pd.DataFrame(df['counters'].groupby('id')[['INSIGHTS_POSIX_SMALL_READ', 'INSIGHTS_POSIX_SMALL_WRITE']].sum()).reset_index()
+        detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
         if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS and total_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-            issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
+            issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read requests'.format(
                 total_reads_small, total_reads_small / total_reads * 100.0
             )
 
@@ -571,12 +574,12 @@ def main():
             recommendation = []
 
             for index, row in detected_files.iterrows():
-                if row['total'] > (total_reads * THRESHOLD_SMALL_REQUESTS / 2):
+                if row['total_reads'] > (total_reads * THRESHOLD_SMALL_REQUESTS / 2):
                     detail.append(
                         {
                             'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
-                                row['total'],
-                                row['total'] / total_reads * 100.0,
+                                row['total_reads'],
+                                row['total_reads'] / total_reads * 100.0,
                                 file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
                             ) 
                         }
@@ -616,7 +619,7 @@ def main():
         )
 
         if total_writes_small and total_writes_small / total_writes > THRESHOLD_SMALL_REQUESTS and total_writes_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-            issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all read/write requests'.format(
+            issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all write requests'.format(
                 total_writes_small, total_writes_small / total_writes * 100.0
             )
 
@@ -624,12 +627,12 @@ def main():
             recommendation = []
 
             for index, row in detected_files.iterrows():
-                if row['total'] > (total_writes * THRESHOLD_SMALL_REQUESTS / 2):
+                if row['total_writes'] > (total_writes * THRESHOLD_SMALL_REQUESTS / 2):
                     detail.append(
                         {
                             'message': '{} ({:.2f}%) small write requests are to "{}"'.format(
-                                row['total'],
-                                row['total'] / total_writes * 100.0,
+                                row['total_writes'],
+                                row['total_writes'] / total_writes * 100.0,
                                 file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
                             ) 
                         }
