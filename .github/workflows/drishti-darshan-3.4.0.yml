@@ -42,7 +42,7 @@ jobs:
 
       - name: Install py-darshan
         run: |
-          pip install darshan==3.4.0
+          pip install darshan==3.4.0.1
 
       - name: Install Drishti
         run: |
