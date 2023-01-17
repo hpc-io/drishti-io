@@ -31,7 +31,7 @@ jobs:
           export DARSHAN_DIR=/opt/darshan
 
           mkdir $DARSHAN_DIR
-          cd darshan
+          cd darshan-3.4.0
           bash prepare.sh
           cd darshan-util
           ./configure --prefix=$DARSHAN_DIR
