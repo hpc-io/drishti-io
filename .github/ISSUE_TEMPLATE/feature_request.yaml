@@ -1,0 +1,22 @@
+name: Feature request
+description: Request a new feature
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+
+assignees:
+  - octocat
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request!
+
+  - type: textarea
+    id: what-feature
+    attributes:
+      label: What feature do you want?
+      description: Please, describe the feature you are requesting.
+      placeholder: 
+      value: 
+    validations:
+      required: true
