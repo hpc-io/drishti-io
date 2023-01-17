@@ -26,6 +26,8 @@ jobs:
           cd darshan-3.4.0
           git checkout darshan-3.4.0
 
+          pip install --upgrade pip
+
       - name: Build Darshan
         run: |
           export DARSHAN_DIR=/opt/darshan
@@ -38,9 +40,12 @@ jobs:
           make
           make install
 
+      - name: Install py-darshan
+        run: |
+          pip install darshan==3.4.0
+
       - name: Install Drishti
         run: |
-          pip install --upgrade pip
           pip install -r requirements.txt
           pip install .
 
