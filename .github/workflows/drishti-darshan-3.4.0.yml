@@ -23,6 +23,7 @@ jobs:
           
           # Darshan
           git clone https://github.com/darshan-hpc/darshan.git
+          git checkout darshan-3.4.0
 
       - name: Build Darshan
         run: |
