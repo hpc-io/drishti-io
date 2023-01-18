@@ -4,7 +4,13 @@
 
 # Drishti: I/O Insights for All
 
-Drishti is a command-line tool to guide end-users in optimizing I/O in their applications by detecting typical I/O performance pitfalls and providing a set of recommendations. To install Drishti, make sure you have Python 3 and first install the dependencies:
+Drishti is a command-line tool to guide end-users in optimizing I/O in their applications by detecting typical I/O performance pitfalls and providing a set of recommendations. You can get Drishti directly from pip:
+
+```
+pip install drishti-io
+```
+
+To install Drishti from scratch, make sure you have Python 3 and first install the dependencies:
 
 ```
 pip install -r requirements.txt

@@ -1,0 +1,100 @@
+name: Drishti (Darshan 3.4.2)
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  drishti:
+    runs-on: ubuntu-latest
+    container: jlbez/dxt-explorer-ubuntu-20.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install cmake gcc git libtool python3 python3-pip libcurl4-openssl-dev software-properties-common  -y
+          
+          # Darshan
+          git clone https://github.com/darshan-hpc/darshan.git darshan-3.4.2
+          cd darshan-3.4.2
+          git checkout darshan-3.4.2
+
+          pip install --upgrade pip
+
+      - name: Build Darshan
+        run: |
+          export DARSHAN_DIR=/opt/darshan
+
+          mkdir $DARSHAN_DIR
+          cd darshan-3.4.2
+          bash prepare.sh
+          cd darshan-util
+          ./configure --prefix=$DARSHAN_DIR
+          make
+          make install
+
+      - name: Install py-darshan
+        run: |
+          pip install darshan==3.4.2
+
+      - name: Install Drishti
+        run: |
+          pip install -r requirements.txt
+          pip install .
+
+      - name: Run Drishti (--help)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti -h
+
+      - name: Run Drishti (--issues)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --issues sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run Drishti (--code)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --code sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--verbose)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --verbose sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--path)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --path sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--html)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --html sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--svg)
+        run: |
+          export PATH=/opt/darshan/bin:$PATH
+
+          drishti --svg sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Upload Artifact
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: tests
+          path: sample/**
+          retention-days: 1

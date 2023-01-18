@@ -1442,7 +1442,7 @@ def main():
 
     insights_end_time = time.time()
 
-    # Version 3.4.2 of py-darshan changed the contents on what is reported in 'job'
+    # Version 3.4.1 of py-darshan changed the contents on what is reported in 'job'
     if 'start_time' in job['job']:
         job_start = datetime.datetime.fromtimestamp(job['job']['start_time'], datetime.timezone.utc)
         job_end = datetime.datetime.fromtimestamp(job['job']['end_time'], datetime.timezone.utc)
