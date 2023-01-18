@@ -21,13 +21,12 @@ from rich.padding import Padding
 from rich.text import Text
 from rich.syntax import Syntax
 from rich.panel import Panel
+from rich.terminal_theme import TerminalTheme
 from rich.terminal_theme import MONOKAI
 from subprocess import call
 
 from packaging import version
 
-
-console = Console(record=True)
 
 RECOMMENDATIONS = 0
 HIGH = 1
@@ -134,6 +133,21 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--light',
+    default=False,
+    action='store_true',
+    dest='export_theme_light',
+    help='Use a light theme for the report when generating files'
+)
+
+parser.add_argument(
+    '--size',
+    default=False,
+    dest='export_size',
+    help='Console width used for the report and generated files'
+)
+
+parser.add_argument(
     '--verbose',
     default=False,
     action='store_true',
@@ -167,8 +181,13 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+if args.export_size:
+    console = Console(record=True, width=int(args.export_size))
+else:
+    console = Console(record=True)
 
 csv_report = []
+
 
 def validate_thresholds():
     """
@@ -1519,10 +1538,38 @@ def main():
         )
     )
 
+    if args.export_theme_light:
+        export_theme = TerminalTheme(
+            (255, 255, 255),
+            (0, 0, 0),
+            [
+                (26, 26, 26),
+                (244, 0, 95),
+                (152, 224, 36),
+                (253, 151, 31),
+                (157, 101, 255),
+                (244, 0, 95),
+                (88, 209, 235),
+                (120, 120, 120),
+                (98, 94, 76),
+            ],
+            [
+                (244, 0, 95),
+                (152, 224, 36),
+                (224, 213, 97),
+                (157, 101, 255),
+                (244, 0, 95),
+                (88, 209, 235),
+                (246, 246, 239),
+            ],
+        )
+    else:
+        export_theme = MONOKAI
+
     if args.export_html:
         console.save_html(
             '{}.html'.format(args.darshan),
-            theme=MONOKAI,
+            theme=export_theme,
             clear=False
         )
 
@@ -1530,7 +1577,7 @@ def main():
         console.save_svg(
             '{}.svg'.format(args.darshan),
             title='Drishti',
-            theme=MONOKAI,
+            theme=export_theme,
             clear=False
         )
 
