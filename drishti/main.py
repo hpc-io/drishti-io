@@ -42,6 +42,7 @@ TARGET_SYSTEM = 3
 
 insights_operation = []
 insights_metadata = []
+insights_dxt = []
 
 insights_total = dict()
 
@@ -95,6 +96,8 @@ INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE = 'M07'
 INSIGHTS_MPI_IO_AGGREGATORS_INTRA = 'M08'
 INSIGHTS_MPI_IO_AGGREGATORS_INTER = 'M09'
 INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
+INSIGHTS_DXT_RANK_ZERO_IMBALANCE = 'D01'
+INSIGHTS_DXT_RANK_IMBALANCE = 'D02'
 
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
@@ -178,6 +181,20 @@ parser.add_argument(
     dest='export_csv',
     help='Export a CSV with the code of all issues that were triggered'
 )
+
+parser.add_argument(
+    '--rank_zero_imbalance', 
+    default=False, 
+    action='store_true', 
+    dest='rank_zero_imbalance',
+    help=argparse.SUPPRESS)
+
+parser.add_argument(
+    '--unbalanced_workload', 
+    default=False, 
+    action='store_true', 
+    dest='unbalanced_workload',
+    help=argparse.SUPPRESS)
 
 args = parser.parse_args()
 
@@ -1437,7 +1454,43 @@ def main():
                     pass
         except FileNotFoundError:
             pass
+    
+    #########################################################################################################################################################################
+    
+    if args.rank_zero_imbalance:
+        issue = 'Rank 0 is issuing a lot of I/O requests'
 
+        recommendation = [
+            {
+                'message': 'Consider using MPI-IO collective'
+            }
+        ]
+
+        insights_dxt.append(
+            message(INSIGHTS_DXT_RANK_ZERO_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+        )
+    
+    #########################################################################################################################################################################
+   
+    if args.unbalanced_workload:
+        issue = 'Detected unbalanced workload between the ranks'
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning the stripe size and count to better distribute the data'
+            },
+            {
+                'message': 'If the application uses netCDF and HDF5, double check the need to set NO_FILL values'
+            }
+        ]
+
+        insights_dxt.append(
+            message(INSIGHTS_DXT_RANK_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+        )
+    
     #########################################################################################################################################################################
 
     insights_end_time = time.time()
@@ -1527,6 +1580,20 @@ def main():
             )
         )
 
+    if insights_dxt:
+        console.print(
+            Panel(
+                Padding(
+                    Group(
+                        *insights_dxt
+                    ),
+                    (1, 1)
+                ),
+                title='DXT',
+                title_align='left'
+            )
+        )
+        
     console.print(
         Panel(
             ' {} | [white]LBNL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
@@ -1615,7 +1682,9 @@ def main():
             INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
             INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
             INSIGHTS_MPI_IO_AGGREGATORS_INTER,
-            INSIGHTS_MPI_IO_AGGREGATORS_OK
+            INSIGHTS_MPI_IO_AGGREGATORS_OK,
+            INSIGHTS_DXT_RANK_ZERO_IMBALANCE,
+            INSIGHTS_DXT_RANK_IMBALANCE
         ]
 
         detected_issues = dict.fromkeys(issues, False)
