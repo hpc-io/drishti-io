@@ -5,6 +5,7 @@ import io
 import sys
 import csv
 import time
+import json
 import shlex
 import datetime
 import argparse
@@ -183,17 +184,9 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--rank_zero_imbalance', 
+    '--json', 
     default=False, 
-    action='store_true', 
-    dest='rank_zero_imbalance',
-    help=argparse.SUPPRESS)
-
-parser.add_argument(
-    '--unbalanced_workload', 
-    default=False, 
-    action='store_true', 
-    dest='unbalanced_workload',
+    dest='json',
     help=argparse.SUPPRESS)
 
 args = parser.parse_args()
@@ -1457,39 +1450,25 @@ def main():
     
     #########################################################################################################################################################################
     
-    if args.rank_zero_imbalance:
-        issue = 'Rank 0 is issuing a lot of I/O requests'
+    if args.json:
+        f = open(args.json)
+        data = json.load(f)
 
-        recommendation = [
-            {
-                'message': 'Consider using MPI-IO collective'
-            }
-        ]
+        for key, value in data.items():
+            issue = value['issue']
+            recommendation = []
+            for rec in value['recommendations']:
+                new_message = {'message': rec}
+                recommendation.append(new_message)
 
-        insights_dxt.append(
-            message(INSIGHTS_DXT_RANK_ZERO_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-        )
-    
-    #########################################################################################################################################################################
-   
-    if args.unbalanced_workload:
-        issue = 'Detected unbalanced workload between the ranks'
-
-        recommendation = [
-            {
-                'message': 'Consider better balancing the data transfer between the application ranks'
-            },
-            {
-                'message': 'Consider tuning the stripe size and count to better distribute the data'
-            },
-            {
-                'message': 'If the application uses netCDF and HDF5, double check the need to set NO_FILL values'
-            }
-        ]
-
-        insights_dxt.append(
-            message(INSIGHTS_DXT_RANK_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-        )
+            if key == "rank_zero_imbalance":
+                insights_dxt.append(
+                    message(INSIGHTS_DXT_RANK_ZERO_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                )
+            elif key == "unbalanced_workload":
+                insights_dxt.append(
+                    message(INSIGHTS_DXT_RANK_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                )
     
     #########################################################################################################################################################################
 
