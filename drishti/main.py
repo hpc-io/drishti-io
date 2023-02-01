@@ -5,6 +5,7 @@ import io
 import sys
 import csv
 import time
+import json
 import shlex
 import datetime
 import argparse
@@ -42,6 +43,7 @@ TARGET_SYSTEM = 3
 
 insights_operation = []
 insights_metadata = []
+insights_dxt = []
 
 insights_total = dict()
 
@@ -178,6 +180,12 @@ parser.add_argument(
     dest='export_csv',
     help='Export a CSV with the code of all issues that were triggered'
 )
+
+parser.add_argument(
+    '--json', 
+    default=False, 
+    dest='json',
+    help=argparse.SUPPRESS)
 
 args = parser.parse_args()
 
@@ -1437,6 +1445,29 @@ def main():
                     pass
         except FileNotFoundError:
             pass
+    
+    #########################################################################################################################################################################
+    
+    codes = []
+    if args.json:
+        f = open(args.json)
+        data = json.load(f)
+
+        for key, values in data.items():
+            for value in values:
+                code = value['code']
+                codes.append(code)
+
+                level = value['level']
+                issue = value['issue']
+                recommendation = []
+                for rec in value['recommendations']:
+                    new_message = {'message': rec}
+                    recommendation.append(new_message)
+
+                insights_dxt.append(
+                    message(code, TARGET_DEVELOPER, level, issue, recommendation)
+                )
 
     #########################################################################################################################################################################
 
@@ -1527,6 +1558,20 @@ def main():
             )
         )
 
+    if insights_dxt:
+        console.print(
+            Panel(
+                Padding(
+                    Group(
+                        *insights_dxt
+                    ),
+                    (1, 1)
+                ),
+                title='DXT',
+                title_align='left'
+            )
+        )
+        
     console.print(
         Panel(
             ' {} | [white]LBNL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
@@ -1617,6 +1662,8 @@ def main():
             INSIGHTS_MPI_IO_AGGREGATORS_INTER,
             INSIGHTS_MPI_IO_AGGREGATORS_OK
         ]
+        if codes:
+            issues.extend(codes)
 
         detected_issues = dict.fromkeys(issues, False)
         detected_issues['JOB'] = job['job']['jobid']
