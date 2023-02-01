@@ -97,8 +97,6 @@ INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE = 'M07'
 INSIGHTS_MPI_IO_AGGREGATORS_INTRA = 'M08'
 INSIGHTS_MPI_IO_AGGREGATORS_INTER = 'M09'
 INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
-INSIGHTS_DXT_RANK_ZERO_IMBALANCE = 'D01'
-INSIGHTS_DXT_RANK_IMBALANCE = 'D02'
 
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
@@ -1450,26 +1448,27 @@ def main():
     
     #########################################################################################################################################################################
     
+    codes = []
     if args.json:
         f = open(args.json)
         data = json.load(f)
 
-        for key, value in data.items():
-            issue = value['issue']
-            recommendation = []
-            for rec in value['recommendations']:
-                new_message = {'message': rec}
-                recommendation.append(new_message)
+        for key, values in data.items():
+            for value in values:
+                code = value['code']
+                codes.append(code)
 
-            if key == "rank_zero_imbalance":
+                level = value['level']
+                issue = value['issue']
+                recommendation = []
+                for rec in value['recommendations']:
+                    new_message = {'message': rec}
+                    recommendation.append(new_message)
+
                 insights_dxt.append(
-                    message(INSIGHTS_DXT_RANK_ZERO_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                    message(code, TARGET_DEVELOPER, level, issue, recommendation)
                 )
-            elif key == "unbalanced_workload":
-                insights_dxt.append(
-                    message(INSIGHTS_DXT_RANK_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-                )
-    
+
     #########################################################################################################################################################################
 
     insights_end_time = time.time()
@@ -1661,10 +1660,10 @@ def main():
             INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
             INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
             INSIGHTS_MPI_IO_AGGREGATORS_INTER,
-            INSIGHTS_MPI_IO_AGGREGATORS_OK,
-            INSIGHTS_DXT_RANK_ZERO_IMBALANCE,
-            INSIGHTS_DXT_RANK_IMBALANCE
+            INSIGHTS_MPI_IO_AGGREGATORS_OK
         ]
+        if codes:
+            issues.extend(codes)
 
         detected_issues = dict.fromkeys(issues, False)
         detected_issues['JOB'] = job['job']['jobid']
