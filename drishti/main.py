@@ -7,6 +7,7 @@ import csv
 import time
 import json
 import shlex
+import shutil
 import datetime
 import argparse
 import subprocess
@@ -242,6 +243,12 @@ def convert_bytes(bytes_number):
     return str(round(double_bytes, 2)) + ' ' + tags[i] 
 
 
+def is_available(name):
+    """Check whether `name` is on PATH and marked as executable."""
+
+    return shutil.which(name) is not None
+
+
 def message(code, target, level, issue, recommendations=None, details=None):
     """
     Display the message on the screen with level, issue, and recommendation.
@@ -306,10 +313,26 @@ def message(code, target, level, issue, recommendations=None, details=None):
         *messages
     )
 
+
 def check_log_version(file, log_version, library_version):
     use_file = file
 
     if version.parse(log_version) < version.parse('3.4.0'):
+        # Check if darshan-convert is installed and available in the PATH
+        if not is_available('darshan-convert'):
+            console.print(
+                Panel(
+                    Padding(
+                        'Darshan file is using an old format and darshan-convert is not available in the PATH.',
+                        (1, 1)
+                    ),
+                    title='{}WARNING'.format('[orange1]'),
+                    title_align='left'
+                )
+            )
+
+            sys.exit(os.EX_DATAERR)
+
         use_file = os.path.basename(file.replace('.darshan', '.converted.darshan'))
 
         console.print(
