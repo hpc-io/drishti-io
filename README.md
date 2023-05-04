@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="https://github.com/hpc-io/io-insights/blob/master/images/drishti-logo.png?raw=true" alt="Drishti"/>
-</p>
+# Drishti I/O: I/O Insights for All
 
-# Drishti: I/O Insights for All
-
-Drishti is a command-line tool to guide end-users in optimizing I/O in their applications by detecting typical I/O performance pitfalls and providing a set of recommendations. You can get Drishti directly from pip:
+Drishti I/O is a command-line tool to guide end-users in optimizing I/O in their applications by detecting typical I/O performance pitfalls and providing a set of recommendations. You can get Drishti directly from pip:
 
 ```
 pip install drishti-io
