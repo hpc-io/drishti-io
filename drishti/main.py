@@ -444,7 +444,8 @@ def main():
         total_size_mpiio = 0
 
     # Since POSIX will capture both POSIX-only accesses and those comming from MPI-IO, we can subtract those
-    total_size_posix -= total_size_mpiio
+    if total_size_posix > 0 and total_size_posix >= total_size_mpiio:
+        total_size_posix -= total_size_mpiio
 
     total_size = total_size_stdio + total_size_posix + total_size_mpiio
 
