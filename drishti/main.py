@@ -1408,7 +1408,8 @@ def main():
         cb_nodes = None
 
         for hint in hints:
-            (key, value) = hint.split('=')
+            if hint != 'no':
+                (key, value) = hint.split('=')
             
             if key == 'cb_nodes':
                 cb_nodes = value
