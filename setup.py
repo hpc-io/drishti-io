@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 setuptools.setup(
     name="drishti-io",
     keywords="drishti",
-    version="0.4",
+    version="0.5",
     author="Jean Luca Bez, Suren Byna",
     author_email="jlbez@lbl.gov, sbyna@lbl.gov",
     description="",
@@ -21,6 +21,7 @@ setuptools.setup(
         'pandas',
         'darshan',
         'rich ==12.5.1',
+        'recorder-utils',
     ],
     packages=[
         'drishti'
@@ -33,7 +34,7 @@ setuptools.setup(
     include_package_data=True,
     entry_points={
         "console_scripts": [
-            "drishti=drishti.main:main"
+            "drishti=drishti.reporter:main"
         ]
     },
     classifiers=[

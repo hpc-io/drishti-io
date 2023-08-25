@@ -9,7 +9,6 @@ import json
 import shlex
 import shutil
 import datetime
-import argparse
 import subprocess
 
 import pandas as pd
@@ -17,301 +16,23 @@ import pandas as pd
 import darshan
 import darshan.backend.cffi_backend as darshanll
 
-from rich import print, box, rule
-from rich.console import Console, Group
+from rich import print, box
+from rich.console import Group
 from rich.padding import Padding
-from rich.text import Text
 from rich.syntax import Syntax
 from rich.panel import Panel
 from rich.terminal_theme import TerminalTheme
 from rich.terminal_theme import MONOKAI
-from subprocess import call
 
 from packaging import version
 
-
-RECOMMENDATIONS = 0
-HIGH = 1
-WARN = 2
-INFO = 3
-OK = 4
-
-ROOT = os.path.abspath(os.path.dirname(__file__))
-
-TARGET_USER = 1
-TARGET_DEVELOPER = 2
-TARGET_SYSTEM = 3
-
-insights_operation = []
-insights_metadata = []
-insights_dxt = []
-
-insights_total = dict()
-
-insights_total[HIGH] = 0
-insights_total[WARN] = 0
-insights_total[RECOMMENDATIONS] = 0
-
-THRESHOLD_OPERATION_IMBALANCE = 0.1
-THRESHOLD_SMALL_REQUESTS = 0.1
-THRESHOLD_SMALL_REQUESTS_ABSOLUTE = 1000
-THRESHOLD_MISALIGNED_REQUESTS = 0.1
-THRESHOLD_METADATA = 0.1
-THRESHOLD_METADATA_TIME_RANK = 30  # seconds
-THRESHOLD_RANDOM_OPERATIONS = 0.2
-THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE = 1000
-THRESHOLD_STRAGGLERS = 0.15
-THRESHOLD_IMBALANCE = 0.30
-THRESHOLD_INTERFACE_STDIO = 0.1
-THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
-THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE = 1000
-
-INSIGHTS_STDIO_HIGH_USAGE = 'S01'
-INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
-INSIGHTS_POSIX_READ_COUNT_INTENSIVE = 'P02'
-INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE = 'P03'
-INSIGHTS_POSIX_READ_SIZE_INTENSIVE = 'P04'
-INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE = 'P05'
-INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE = 'P06'
-INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE = 'P07'
-INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE = 'P08'
-INSIGHTS_POSIX_REDUNDANT_READ_USAGE = 'P09'
-INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE = 'P10'
-INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE = 'P11'
-INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE = 'P12'
-INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE = 'P13'
-INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE = 'P14'
-INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE = 'P15'
-INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE = 'P16'
-INSIGHTS_POSIX_HIGH_METADATA_TIME = 'P17'
-INSIGHTS_POSIX_SIZE_IMBALANCE = 'P18'
-INSIGHTS_POSIX_TIME_IMBALANCE = 'P19'
-INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE = 'P21'
-INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE = 'P22'
-INSIGHTS_MPI_IO_NO_USAGE = 'M01'
-INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE = 'M02'
-INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE = 'M03'
-INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE = 'M04'
-INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE = 'M05'
-INSIGHTS_MPI_IO_BLOCKING_READ_USAGE = 'M06'
-INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE = 'M07'
-INSIGHTS_MPI_IO_AGGREGATORS_INTRA = 'M08'
-INSIGHTS_MPI_IO_AGGREGATORS_INTER = 'M09'
-INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
-
-# TODO: need to verify the threashold to be between 0 and 1
-# TODO: read thresholds from file
-
-parser = argparse.ArgumentParser(
-    description='Drishti: '
-)
-
-parser.add_argument(
-    'darshan',
-    help='Input .darshan file'
-)
-
-parser.add_argument(
-    '--issues',
-    default=False,
-    action='store_true',
-    dest='only_issues',
-    help='Only displays the detected issues and hides the recommendations'
-)
-
-parser.add_argument(
-    '--html',
-    default=False,
-    action='store_true',
-    dest='export_html',
-    help='Export the report as an HTML page'
-)
-
-parser.add_argument(
-    '--svg',
-    default=False,
-    action='store_true',
-    dest='export_svg',
-    help='Export the report as an SVG image'
-)
-
-parser.add_argument(
-    '--light',
-    default=False,
-    action='store_true',
-    dest='export_theme_light',
-    help='Use a light theme for the report when generating files'
-)
-
-parser.add_argument(
-    '--size',
-    default=False,
-    dest='export_size',
-    help='Console width used for the report and generated files'
-)
-
-parser.add_argument(
-    '--verbose',
-    default=False,
-    action='store_true',
-    dest='verbose',
-    help='Display extended details for the recommendations'
-)
-
-parser.add_argument(
-    '--code',
-    default=False,
-    action='store_true',
-    dest='code',
-    help='Display insights identification code'
-)
-
-parser.add_argument(
-    '--path',
-    default=False,
-    action='store_true',
-    dest='full_path',
-    help='Display the full file path for the files that triggered the issue'
-)
-
-parser.add_argument(
-    '--csv',
-    default=False,
-    action='store_true',
-    dest='export_csv',
-    help='Export a CSV with the code of all issues that were triggered'
-)
-
-parser.add_argument(
-    '--json', 
-    default=False, 
-    dest='json',
-    help=argparse.SUPPRESS)
-
-args = parser.parse_args()
-
-if args.export_size:
-    console = Console(record=True, width=int(args.export_size))
-else:
-    console = Console(record=True)
-
-csv_report = []
-
-
-def validate_thresholds():
-    """
-    Validate thresholds defined by the user.
-    """
-    assert(THRESHOLD_OPERATION_IMBALANCE >= 0.0 and THRESHOLD_OPERATION_IMBALANCE <= 1.0)
-    assert(THRESHOLD_SMALL_REQUESTS >= 0.0 and THRESHOLD_SMALL_REQUESTS <= 1.0)
-    assert(THRESHOLD_MISALIGNED_REQUESTS >= 0.0 and THRESHOLD_MISALIGNED_REQUESTS <= 1.0)
-    assert(THRESHOLD_METADATA >= 0.0 and THRESHOLD_METADATA <= 1.0)
-    assert(THRESHOLD_RANDOM_OPERATIONS >= 0.0 and THRESHOLD_RANDOM_OPERATIONS <= 1.0)
-
-    assert(THRESHOLD_METADATA_TIME_RANK >= 0.0)
-
-
-def clear():
-    """
-    Clear the screen with the comment call based on the operating system.
-    """
-    _ = call('clear' if os.name == 'posix' else 'cls')
-
-
-def convert_bytes(bytes_number):
-    """
-    Convert bytes into formatted string.
-    """
-    tags = [
-        'bytes',
-        'KB',
-        'MB',
-        'GB',
-        'TB',
-        'PB',
-        'EB'
-    ]
-
-    i = 0
-    double_bytes = bytes_number
-
-    while (i < len(tags) and  bytes_number >= 1024):
-        double_bytes = bytes_number / 1024.0
-        i = i + 1
-        bytes_number = bytes_number / 1024
-
-    return str(round(double_bytes, 2)) + ' ' + tags[i] 
+from .includes import *
 
 
 def is_available(name):
     """Check whether `name` is on PATH and marked as executable."""
 
     return shutil.which(name) is not None
-
-
-def message(code, target, level, issue, recommendations=None, details=None):
-    """
-    Display the message on the screen with level, issue, and recommendation.
-    """
-    icon = ':arrow_forward:'
-
-    if level in (HIGH, WARN):
-        insights_total[level] += 1
-
-    if level == HIGH:
-        color = '[red]'
-    elif level == WARN:
-        color = '[orange1]'
-    elif level == OK:
-        color = '[green]'
-    else:
-        color = ''
-
-    messages = [
-        '{}{}{} {}'.format(
-            color,
-            icon,
-            ' [' + code + ']' if args.code else '',
-            issue
-        )
-    ]
-
-    if args.export_csv:
-        csv_report.append(code)
-
-    if details:
-        for detail in details:
-            messages.append('  {}:left_arrow_curving_right: {}'.format(
-                    color,
-                    detail['message']
-                )
-            )
-
-    if recommendations:
-        if not args.only_issues:
-            messages.append('  [white]:left_arrow_curving_right: [b]Recommendations:[/b]')
-
-            for recommendation in recommendations:
-                messages.append('    :left_arrow_curving_right: {}'.format(recommendation['message']))
-
-                if args.verbose and 'sample' in recommendation:
-                    messages.append(
-                        Padding(
-                            Panel(
-                                recommendation['sample'],
-                                title='Solution Example Snippet',
-                                title_align='left',
-                                padding=(1, 2)
-                            ),
-                            (1, 0, 1, 7)
-                        )
-                    )
-
-        insights_total[RECOMMENDATIONS] += len(recommendations)
-
-    return Group(
-        *messages
-    )
 
 
 def check_log_version(file, log_version, library_version):
@@ -363,18 +84,13 @@ def check_log_version(file, log_version, library_version):
     return use_file
 
 
-def main():
-    if not os.path.isfile(args.darshan):
-        print('Unable to open .darshan file.')
-
-        sys.exit(os.EX_NOINPUT)
-
-    # clear()
+def handler(args):
+    init_console(args)
     validate_thresholds()
 
     insights_start_time = time.time()
 
-    log = darshanll.log_open(args.darshan)
+    log = darshanll.log_open(args.log_path)
 
     modules = darshanll.log_get_modules(log)
 
@@ -384,7 +100,7 @@ def main():
     library_version = darshanll.darshan.backend.cffi_backend.get_lib_version()
 
     # Make sure log format is of the same version
-    filename = check_log_version(args.darshan, log_version, library_version)
+    filename = check_log_version(args.log_path, log_version, library_version)
  
     darshanll.log_close(log)
 
@@ -491,8 +207,6 @@ def main():
             'mpiio': uses_mpiio
         }
 
-    df_posix_files = df_posix
-
     if total_size and total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
         issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
             total_size_stdio / total_size * 100.0,
@@ -506,7 +220,7 @@ def main():
         ]
 
         insights_operation.append(
-            message(INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+            message(args, INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
     if 'MPI-IO' not in modules:
@@ -519,17 +233,13 @@ def main():
         ]
 
         insights_operation.append(
-            message(INSIGHTS_MPI_IO_NO_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
+            message(args, INSIGHTS_MPI_IO_NO_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
         )
 
     #########################################################################################################################################################################
 
     if 'POSIX' in report.records:
         df = report.records['POSIX'].to_df()
-
-        #print(df)
-        #print(df['counters'].columns)
-        #print(df['fcounters'].columns)
 
         #########################################################################################################################################################################
 
@@ -547,7 +257,7 @@ def main():
             )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
+                message(args, INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
             )
 
         if total_reads > total_writes and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
@@ -556,7 +266,7 @@ def main():
             )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_READ_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
+                message(args, INSIGHTS_POSIX_READ_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
             )
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
@@ -564,22 +274,22 @@ def main():
 
         total_size = total_written_size + total_read_size
 
-        if total_written_size > total_read_size and abs(total_written_size - total_read_size) / (total_written_size + total_read_size) > THRESHOLD_OPERATION_IMBALANCE:
+        if total_written_size > total_read_size and abs(total_written_size - total_read_size) / total_size > THRESHOLD_OPERATION_IMBALANCE:
             issue = 'Application is write size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
-                total_written_size / (total_written_size + total_read_size) * 100.0, total_read_size / (total_written_size + total_read_size) * 100.0
+                total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
             )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
+                message(args, INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
             )
 
-        if total_read_size > total_written_size and abs(total_written_size - total_read_size) / (total_written_size + total_read_size) > THRESHOLD_OPERATION_IMBALANCE:
+        if total_read_size > total_written_size and abs(total_written_size - total_read_size) / total_size > THRESHOLD_OPERATION_IMBALANCE:
             issue = 'Application is read size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
-                total_written_size / (total_written_size + total_read_size) * 100.0, total_read_size / (total_written_size + total_read_size) * 100.0
+                total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
             )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_READ_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
+                message(args, INSIGHTS_POSIX_READ_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
             )
 
         #########################################################################################################################################################################
@@ -657,7 +367,7 @@ def main():
                 )
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
         # Get the number of small I/O operations (less than the stripe size)
@@ -710,7 +420,7 @@ def main():
                 )
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
         #########################################################################################################################################################################
@@ -726,7 +436,7 @@ def main():
             )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
+                message(args, INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
             )
 
         if total_operations and total_file_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
@@ -760,7 +470,7 @@ def main():
                 )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(args, INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
 
         #########################################################################################################################################################################
@@ -773,7 +483,7 @@ def main():
             issue = 'Application might have redundant read traffic (more data read than the highest offset)'
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_REDUNDANT_READ_USAGE, TARGET_DEVELOPER, WARN, issue, None)
+                message(args, INSIGHTS_POSIX_REDUNDANT_READ_USAGE, TARGET_DEVELOPER, WARN, issue, None)
             )
 
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
@@ -782,7 +492,7 @@ def main():
             issue = 'Application might have redundant write traffic (more data written than the highest offset)'
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, None)
+                message(args, INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, None)
             )
 
         #########################################################################################################################################################################
@@ -791,6 +501,7 @@ def main():
 
         read_consecutive = df['counters']['POSIX_CONSEC_READS'].sum()
         #print('READ Consecutive: {} ({:.2f}%)'.format(read_consecutive, read_consecutive / total_reads * 100))
+
 
         read_sequential = df['counters']['POSIX_SEQ_READS'].sum()
         read_sequential -= read_consecutive
@@ -812,7 +523,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                    message(args, INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
                 )
             else:
                 issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) read requests'.format(
@@ -821,15 +532,13 @@ def main():
                 )
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE, TARGET_DEVELOPER, OK, issue, None)
+                    message(args, INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE, TARGET_DEVELOPER, OK, issue, None)
                 )
 
         write_consecutive = df['counters']['POSIX_CONSEC_WRITES'].sum()
-        #print('WRITE Consecutive: {} ({:.2f}%)'.format(write_consecutive, write_consecutive / total_writes * 100))
 
         write_sequential = df['counters']['POSIX_SEQ_WRITES'].sum()
         write_sequential -= write_consecutive
-        #print('WRITE Sequential: {} ({:.2f}%)'.format(write_sequential, write_sequential / total_writes * 100))
 
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
@@ -847,7 +556,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                    message(args, INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
                 )
             else:
                 issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) write requests'.format(
@@ -856,13 +565,12 @@ def main():
                 )
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE, TARGET_DEVELOPER, OK, issue, None)
+                    message(args, INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE, TARGET_DEVELOPER, OK, issue, None)
                 )
 
         #########################################################################################################################################################################
 
         # Shared file with small operations
-        # print(df['counters'].loc[(df['counters']['rank'] == -1)])
 
         shared_files = df['counters'].loc[(df['counters']['rank'] == -1)]
 
@@ -913,7 +621,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                    message(args, INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
                 )
 
             total_shared_writes = shared_files['POSIX_WRITES'].sum()
@@ -960,7 +668,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                    message(args, INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
                 )
 
         #########################################################################################################################################################################
@@ -991,7 +699,7 @@ def main():
                 )
 
             insights_metadata.append(
-                message(INSIGHTS_POSIX_HIGH_METADATA_TIME, TARGET_DEVELOPER, HIGH, issue, recommendation)
+                message(args, INSIGHTS_POSIX_HIGH_METADATA_TIME, TARGET_DEVELOPER, HIGH, issue, recommendation)
             )
 
         # We already have a single line for each shared-file access
@@ -1046,7 +754,7 @@ def main():
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_SIZE_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_SIZE_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
             )
 
         # POSIX_F_FASTEST_RANK_TIME
@@ -1101,7 +809,7 @@ def main():
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
             )
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
@@ -1164,7 +872,7 @@ def main():
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
         imbalance_count = 0
@@ -1214,7 +922,7 @@ def main():
             ]
 
             insights_operation.append(
-                message(INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                message(args, INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
             )
 
     #########################################################################################################################################################################
@@ -1224,8 +932,6 @@ def main():
         df_mpiio = report.records['MPI-IO'].to_df()
 
         df_mpiio['counters'] = df_mpiio['counters'].assign(id=lambda d: d['id'].astype(str))
-
-        #print(df_mpiio)
 
         # Get the files responsible
         detected_files = []
@@ -1265,7 +971,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                    message(args, INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
                 )
         else:
             issue = 'Application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
@@ -1274,7 +980,7 @@ def main():
             )
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, OK, issue)
+                message(args, INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, OK, issue)
             )
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
@@ -1312,7 +1018,7 @@ def main():
                 ]
 
                 insights_operation.append(
-                    message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+                    message(args, INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
                 )
         else:
             issue = 'Application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
@@ -1321,7 +1027,7 @@ def main():
             )
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, OK, issue)
+                message(args, INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, OK, issue)
             )
 
         #########################################################################################################################################################################
@@ -1358,7 +1064,7 @@ def main():
                 )
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_BLOCKING_READ_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
+                message(args, INSIGHTS_MPI_IO_BLOCKING_READ_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
             )
 
         if df_mpiio['counters']['MPIIO_NB_WRITES'].sum() == 0:
@@ -1383,7 +1089,7 @@ def main():
                 )
 
             insights_operation.append(
-                message(INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
+                message(args, INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
             )
 
     #########################################################################################################################################################################
@@ -1448,21 +1154,21 @@ def main():
                             ]
 
                             insights_operation.append(
-                                message(INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
+                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
                             )
 
                         if cb_nodes < NUMBER_OF_COMPUTE_NODES:
                             issue = 'Application is using intra-node aggregators'
 
                             insights_operation.append(
-                                message(INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
+                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
                             )
 
                         if cb_nodes == NUMBER_OF_COMPUTE_NODES:
                             issue = 'Application is using one aggregator per compute node'
 
                             insights_operation.append(
-                                message(INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
+                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
                             )
 
 
@@ -1491,7 +1197,7 @@ def main():
                     recommendation.append(new_message)
 
                 insights_dxt.append(
-                    message(code, TARGET_DEVELOPER, level, issue, recommendation)
+                    message(args, code, TARGET_DEVELOPER, level, issue, recommendation)
                 )
 
     #########################################################################################################################################################################
@@ -1518,7 +1224,7 @@ def main():
                     job['exe'].split()[0]
                 ),
                 ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
-                    os.path.basename(args.darshan)
+                    os.path.basename(args.log_path)
                 ),
                 ' [b]EXECUTION TIME[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                     job_start,
@@ -1541,7 +1247,7 @@ def main():
                     ' '.join(hints)
                 )
             ]),
-            title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.3[/b]',
+            title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.5[/b]',
             title_align='left',
             subtitle='[red][b]{} critical issues[/b][/red], [orange1][b]{} warnings[/b][/orange1], and [white][b]{} recommendations[/b][/white]'.format(
                 insights_total[HIGH],
@@ -1638,14 +1344,14 @@ def main():
 
     if args.export_html:
         console.save_html(
-            '{}.html'.format(args.darshan),
+            '{}.html'.format(args.log_path),
             theme=export_theme,
             clear=False
         )
 
     if args.export_svg:
         console.save_svg(
-            '{}.svg'.format(args.darshan),
+            '{}.svg'.format(args.log_path),
             title='Drishti',
             theme=export_theme,
             clear=False
@@ -1697,7 +1403,7 @@ def main():
             detected_issues[report] = True
 
         filename = '{}-summary.csv'.format(
-            args.darshan.replace('.darshan', '')
+            args.log_path.replace('.darshan', '')
         )
 
         with open(filename, 'w') as f:
@@ -1705,6 +1411,3 @@ def main():
             w.writerow(detected_issues.keys())
             w.writerow(detected_issues.values())
 
-
-if __name__ == '__main__':
-    main()
