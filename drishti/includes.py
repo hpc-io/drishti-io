@@ -77,6 +77,8 @@ INSIGHTS_MPI_IO_AGGREGATORS_INTRA = 'M08'
 INSIGHTS_MPI_IO_AGGREGATORS_INTER = 'M09'
 INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
 
+DETAILS_MAX_SIZE = 10
+
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
 
@@ -88,6 +90,15 @@ csv_report = []
 def init_console(args):
     if args.export_size: console.width = int(args.export_size)
 
+    insights_operation.clear()
+    insights_metadata.clear()
+    insights_dxt.clear()
+
+    insights_total[HIGH] = 0
+    insights_total[WARN] = 0
+    insights_total[RECOMMENDATIONS] = 0
+
+    csv_report.clear()
 
 def validate_thresholds():
     """
@@ -158,7 +169,7 @@ def message(args, code, target, level, issue, recommendations=None, details=None
         csv_report.append(code)
 
     if details:
-        for detail in details:
+        for detail in details[:DETAILS_MAX_SIZE]:
             messages.append('  {}:left_arrow_curving_right: {}'.format(
                     color,
                     detail['message']
