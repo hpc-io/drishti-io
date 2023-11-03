@@ -94,7 +94,16 @@ parser.add_argument(
     '--json', 
     default=False, 
     dest='json',
-    help=argparse.SUPPRESS)
+    help=argparse.SUPPRESS
+)
+
+parser.add_argument(
+    '--split',
+    default=False,
+    action='store_true',
+    dest='split_files',
+    help='Split the files and generate report for each file'
+)
 
 args = parser.parse_args()
 
@@ -127,6 +136,10 @@ def main():
         handle_darshan.handler(args)
 
     elif log_type == LOG_TYPE_RECORDER:
-        from . import handle_recorder
-        handle_recorder.handler(args)
+        if args.split_files:
+            from . import handle_recorder_split
+            handle_recorder_split.handler(args)
+        else:
+            from . import handle_recorder
+            handle_recorder.handler(args)
 

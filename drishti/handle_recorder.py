@@ -23,26 +23,6 @@ from recorder_utils.build_offset_intervals import build_offset_intervals
 from .includes import *
 
 
-def get_modules(reader):
-    func_list = reader.funcs
-    ranks = reader.GM.total_ranks
-    modules = set()
-
-    for rank in range(ranks):
-        for i in range(reader.LMs[rank].total_records):
-            record = reader.records[rank][i]
-            func_name = func_list[record.func_id]
-            if 'MPI_File' in func_name:
-                modules.add('MPI-IO')
-            elif 'MPI' in func_name:
-                modules.add('MPI')
-            elif 'H5' in func_name:
-                modules.add('H5F')
-            else: modules.add('POSIX')
-
-    return modules
-
-
 def get_accessed_files(reader):
     ranks = reader.GM.total_ranks
     filemap = {}
@@ -79,7 +59,6 @@ def handler(args):
     df_intervals = build_offset_intervals(reader)
     df_posix_records = init_df_posix_recordes(reader)
 
-    modules = get_modules(reader)
     unique_files = get_accessed_files(reader)
 
     def add_api(row):
@@ -97,6 +76,8 @@ def handler(args):
     
     df_intervals['duration'] = df_intervals.apply(add_duration, axis=1)
     df_posix_records['duration'] = df_posix_records.apply(add_duration, axis=1)
+
+    modules = set(df_intervals['api'].unique())
 
     #########################################################################################################################################################################
 
@@ -156,7 +137,7 @@ def handler(args):
             message(args, INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
-    if 'MPI-IO' not in modules:
+    if 'MPIIO' not in modules:
         issue = 'Application is using low-performance interface'
 
         recommendation = [
@@ -264,7 +245,7 @@ def handler(args):
                 }
             )
 
-            if 'MPI-IO' in modules:
+            if 'MPIIO' in modules:
                 recommendation.append(
                     {
                         'message': 'Since the appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_read_all() or MPI_File_read_at_all()) to aggregate requests into larger ones',
@@ -308,7 +289,7 @@ def handler(args):
                 }
             )
 
-            if 'MPI-IO' in modules:
+            if 'MPIIO' in modules:
                 recommendation.append(
                     {
                         'message': 'Since the application already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
@@ -922,7 +903,7 @@ def handler(args):
                     }
                 )
 
-            if 'MPI-IO' in modules:
+            if 'MPIIO' in modules:
                 recommendation.append(
                     {
                         'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations', # (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
@@ -947,7 +928,7 @@ def handler(args):
                     }
                 )
 
-            if 'MPI-IO' in modules:
+            if 'MPIIO' in modules:
                 recommendation.append(
                     {
                         'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations',  # (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
