@@ -6,6 +6,18 @@ from subprocess import call
 from .parser import *
 
 
+'''
+                         |- handler_darshan   -|
+                         |                     |
+reporter -> /handlers -> |- handler_recorder  -|   -| 
+                         |                     |    |    
+                         |- handler_xxx ...   -|    |
+    ________________________________________________|
+    |
+    |-----> /includes -> module -> config -> parser
+'''
+
+
 LOG_TYPE_DARSHAN = 0
 LOG_TYPE_RECORDER = 1
 
@@ -37,10 +49,7 @@ def main():
         from .handle_darshan import handler
 
     elif log_type == LOG_TYPE_RECORDER:
-        if args.split_files:
-            from .handle_recorder_split import handler
-        else:
-            from .handle_recorder import handler
+        from .handle_recorder import handler
     
     handler()
 
