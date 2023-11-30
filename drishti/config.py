@@ -84,19 +84,17 @@ INSIGHTS_MPI_IO_AGGREGATORS_OK = 'M10'
 
 DETAILS_MAX_SIZE = 10
 
+
+csv_report = []
+codes = []
+
 # TODO: need to verify the threashold to be between 0 and 1
 # TODO: read thresholds from file
 
 
-console = Console(record=True)
-csv_report = []
-codes = []
-export_theme = MONOKAI
-
-
 def init_console():
-    set_export_size()
-    set_export_theme()
+    console = Console(record=True)
+    if args.export_size: console.width = int(args.export_size)
 
     insights_operation.clear()
     insights_metadata.clear()
@@ -104,10 +102,10 @@ def init_console():
     insights_total[HIGH] = 0
     insights_total[WARN] = 0
     insights_total[RECOMMENDATIONS] = 0
+    return console
 
 
 def set_export_theme():
-    global export_theme
     if args.export_theme_light:
         export_theme = TerminalTheme(
             (255, 255, 255),
@@ -133,10 +131,9 @@ def set_export_theme():
                 (246, 246, 239),
             ],
         )
-
-
-def set_export_size():
-    if args.export_size: console.width = int(args.export_size)
+    else:
+        export_theme = MONOKAI
+    return export_theme
 
 
 def load_json():
@@ -268,5 +265,6 @@ def message(code, target, level, issue, recommendations=None, details=None):
 '''
 Pre-load
 '''
-load_json()
+if not args.split_files:
+    load_json()
 

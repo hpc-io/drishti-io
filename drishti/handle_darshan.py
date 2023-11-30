@@ -21,7 +21,7 @@ def is_available(name):
     return shutil.which(name) is not None
 
 
-def check_log_version(file, log_version, library_version):
+def check_log_version(console, file, log_version, library_version):
     use_file = file
 
     if version.parse(log_version) < version.parse('3.4.0'):
@@ -71,7 +71,7 @@ def check_log_version(file, log_version, library_version):
 
 
 def handler():
-    init_console()
+    console = init_console()
     validate_thresholds()
 
     insights_start_time = time.time()
@@ -86,7 +86,7 @@ def handler():
     library_version = darshanll.darshan.backend.cffi_backend.get_lib_version()
 
     # Make sure log format is of the same version
-    filename = check_log_version(args.log_path, log_version, library_version)
+    filename = check_log_version(console, args.log_path, log_version, library_version)
  
     darshanll.log_close(log)
 
@@ -651,11 +651,14 @@ def handler():
 
     console.print()
 
-    display_content()
-    display_footer(insights_start_time, insights_end_time)
+    display_content(console)
+    display_footer(console, insights_start_time, insights_end_time)
 
-    export_html()
-    export_svg()
+    filename = '{}.html'.format(args.log_path)
+    export_html(console, filename)
+
+    filename = '{}.svg'.format(args.log_path)
+    export_svg(console, filename)
 
     filename = '{}-summary.csv'.format(
         args.log_path.replace('.darshan', '')

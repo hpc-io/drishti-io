@@ -433,6 +433,27 @@ def check_shared_data_imblance(stragglers_count, detected_files, file_map):
         )
 
 
+def check_shared_data_imblance_split(slowest_rank_bytes, fastest_rank_bytes, total_transfer_size):
+    if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > THRESHOLD_STRAGGLERS:
+        issue = 'Load imbalance of {:.2f}% detected'.format(
+            abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size * 100
+        )
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning how your data is distributed in the file system by changing the stripe size and count',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_SIZE_IMBALANCE, TARGET_USER, HIGH, issue, recommendation)
+        )
+
+
 '''
 detected_files required columns:
 ['id', 'time_imbalance']
@@ -467,6 +488,27 @@ def check_shared_time_imbalance(stragglers_count, detected_files, file_map):
 
         insights_operation.append(
             message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
+        )
+
+
+def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, total_transfer_time):
+    if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > THRESHOLD_STRAGGLERS:
+        issue = 'Load imbalance of {:.2f}% detected'.format(
+            abs(slowest_rank_time - fastest_rank_time) / total_transfer_time * 100
+        )
+
+        recommendation = [
+            {
+                'message': 'Consider better distributing the data in the parallel file system' # needs to review what suggestion to give
+            },
+            {
+                'message': 'Consider tuning how your data is distributed in the file system by changing the stripe size and count',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation)
         )
 
 
@@ -514,6 +556,34 @@ def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
         )
 
 
+def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written):
+    if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > THRESHOLD_IMBALANCE:
+        issue = 'Load imbalance of {:.2f}% detected'.format(
+            abs(max_bytes_written - min_bytes_written) / max_bytes_written  * 100
+        )
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning the stripe size and count to better distribute the data',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/pnetcdf-hdf5-no-fill.c'), line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
+        )
+
+
 '''
 detected_files required columns:
 ['id', 'read_imbalance']
@@ -555,6 +625,34 @@ def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
 
         insights_operation.append(
             message(INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+        )
+
+
+def check_individual_read_imbalance_split(max_bytes_read, min_bytes_read):
+    if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > THRESHOLD_IMBALANCE:
+        issue = 'Load imbalance of {:.2f}% detected'.format(
+            abs(max_bytes_read - min_bytes_read) / max_bytes_read  * 100
+        )
+
+        recommendation = [
+            {
+                'message': 'Consider better balancing the data transfer between the application ranks'
+            },
+            {
+                'message': 'Consider tuning the stripe size and count to better distribute the data',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
+                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/pnetcdf-hdf5-no-fill.c'), line_numbers=True, background_color='default')
+            },
+            {
+                'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
+            }
+        ]
+
+        insights_operation.append(
+            message(INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation)
         )
 
 
@@ -738,7 +836,7 @@ def check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES):
 
 # Layout and export
 
-def display_content():
+def display_content(console):
     if insights_metadata:
         console.print(
             Panel(
@@ -782,7 +880,7 @@ def display_content():
         )
 
 
-def display_footer(insights_start_time, insights_end_time):
+def display_footer(console, insights_start_time, insights_end_time):
     console.print(
         Panel(
             ' {} | [white]LBNL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
@@ -794,21 +892,21 @@ def display_footer(insights_start_time, insights_end_time):
         )
     )
 
-def export_html():
+def export_html(console, filename):
     if args.export_html:
         console.save_html(
-            '{}.html'.format(args.log_path),
-            theme=export_theme,
+            filename,
+            theme=set_export_theme(),
             clear=False
         )
 
 
-def export_svg():
+def export_svg(console, filename):
     if args.export_svg:
         console.save_svg(
-            '{}.svg'.format(args.log_path),
+            filename,
             title='Drishti',
-            theme=export_theme,
+            theme=set_export_theme(),
             clear=False
         )
 
