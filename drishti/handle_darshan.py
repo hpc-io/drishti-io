@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
 
-import os
 import io
 import sys
-import csv
 import time
-import json
 import shlex
 import shutil
-import datetime
 import subprocess
-
 import pandas as pd
-
 import darshan
 import darshan.backend.cffi_backend as darshanll
 
-from rich import print, box
-from rich.console import Group
-from rich.padding import Padding
-from rich.syntax import Syntax
-from rich.panel import Panel
-from rich.terminal_theme import TerminalTheme
-from rich.terminal_theme import MONOKAI
-
+from rich import print
 from packaging import version
-
-from .includes import *
+from .module import *
 
 
 def is_available(name):
@@ -84,8 +70,8 @@ def check_log_version(file, log_version, library_version):
     return use_file
 
 
-def handler(args):
-    init_console(args)
+def handler():
+    init_console()
     validate_thresholds()
 
     insights_start_time = time.time()
@@ -207,34 +193,8 @@ def handler(args):
             'mpiio': uses_mpiio
         }
 
-    if total_size and total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
-        issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
-            total_size_stdio / total_size * 100.0,
-            convert_bytes(total_size_stdio)
-        )
-
-        recommendation = [
-            {
-                'message': 'Consider switching to a high-performance I/O interface such as MPI-IO'
-            }
-        ]
-
-        insights_operation.append(
-            message(args, INSIGHTS_STDIO_HIGH_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-        )
-
-    if 'MPI-IO' not in modules:
-        issue = 'Application is using low-performance interface'
-
-        recommendation = [
-            {
-                'message': 'Consider switching to a high-performance I/O interface such as MPI-IO'
-            }
-        ]
-
-        insights_operation.append(
-            message(args, INSIGHTS_MPI_IO_NO_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
-        )
+    check_stdio(total_size, total_size_stdio)
+    check_mpiio(modules)
 
     #########################################################################################################################################################################
 
@@ -251,46 +211,14 @@ def handler(args):
         total_operations = total_writes + total_reads 
 
         # To check whether the application is write-intersive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
-        if total_writes > total_reads and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
-            issue = 'Application is write operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
-                total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
-            )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
-            )
-
-        if total_reads > total_writes and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
-            issue = 'Application is read operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
-                total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
-            )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_READ_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
-            )
+        check_operation_intensive(total_operations, total_reads, total_writes)
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
         total_written_size = df['counters']['POSIX_BYTES_WRITTEN'].sum()
 
         total_size = total_written_size + total_read_size
 
-        if total_written_size > total_read_size and abs(total_written_size - total_read_size) / total_size > THRESHOLD_OPERATION_IMBALANCE:
-            issue = 'Application is write size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
-                total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
-            )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
-            )
-
-        if total_read_size > total_written_size and abs(total_written_size - total_read_size) / total_size > THRESHOLD_OPERATION_IMBALANCE:
-            issue = 'Application is read size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
-                total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
-            )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_READ_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
-            )
+        check_size_intensive(total_size, total_read_size, total_written_size)
 
         #########################################################################################################################################################################
 
@@ -301,6 +229,14 @@ def handler(args):
             df['counters']['POSIX_SIZE_READ_1K_10K'].sum() +
             df['counters']['POSIX_SIZE_READ_10K_100K'].sum() +
             df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
+        )
+
+        total_writes_small = (
+            df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
+            df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
         )
 
         # Get the files responsible for more than half of these accesses
@@ -326,102 +262,7 @@ def handler(args):
         detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS and total_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-            issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read requests'.format(
-                total_reads_small, total_reads_small / total_reads * 100.0
-            )
-
-            detail = []
-            recommendation = []
-
-            for index, row in detected_files.iterrows():
-                if row['total_reads'] > (total_reads * THRESHOLD_SMALL_REQUESTS / 2):
-                    detail.append(
-                        {
-                            'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
-                                row['total_reads'],
-                                row['total_reads'] / total_reads * 100.0,
-                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                            ) 
-                        }
-                    )
-
-            recommendation.append(
-                {
-                    'message': 'Consider buffering read operations into larger more contiguous ones'
-                }
-            )
-
-            if 'MPI-IO' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since the appplication already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_read_all() or MPI_File_read_at_all()) to aggregate requests into larger ones',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-read.c'), line_numbers=True, background_color='default')
-                    }
-                )
-            else:
-                recommendation.append(
-                    {
-                        'message': 'Application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
-                    }
-                )
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-            )
-
-        # Get the number of small I/O operations (less than the stripe size)
-        total_writes_small = (
-            df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
-        )
-
-        if total_writes_small and total_writes_small / total_writes > THRESHOLD_SMALL_REQUESTS and total_writes_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-            issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all write requests'.format(
-                total_writes_small, total_writes_small / total_writes * 100.0
-            )
-
-            detail = []
-            recommendation = []
-
-            for index, row in detected_files.iterrows():
-                if row['total_writes'] > (total_writes * THRESHOLD_SMALL_REQUESTS / 2):
-                    detail.append(
-                        {
-                            'message': '{} ({:.2f}%) small write requests are to "{}"'.format(
-                                row['total_writes'],
-                                row['total_writes'] / total_writes * 100.0,
-                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                            ) 
-                        }
-                    )
-
-            recommendation.append(
-                {
-                    'message': 'Consider buffering write operations into larger more contiguous ones'
-                }
-            )
-
-            if 'MPI-IO' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since the application already uses MPI-IO, consider using collective I/O calls (e.g. MPI_File_write_all() or MPI_File_write_at_all()) to aggregate requests into larger ones',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-write.c'), line_numbers=True, background_color='default')
-                    }
-                )
-            else:
-                recommendation.append(
-                    {
-                        'message': 'Application does not use MPI-IO for operations, consider use this interface instead to harness collective operations'
-                    }
-                )
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-            )
+        check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map)
 
         #########################################################################################################################################################################
 
@@ -430,70 +271,16 @@ def handler(args):
         total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
         total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-        if total_operations and total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
-            issue = 'Application has a high number ({:.2f}%) of misaligned memory requests'.format(
-                total_mem_not_aligned / total_operations * 100.0
-            )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
-            )
-
-        if total_operations and total_file_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
-            issue = 'Application issues a high number ({:.2f}%) of misaligned file requests'.format(
-                total_file_not_aligned / total_operations * 100.0
-            )
-
-            recommendation = [
-                {
-                    'message': 'Consider aligning the requests to the file system block boundaries'
-                }
-            ]
-
-            if 'HF5' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since the appplication uses HDF5, consider using H5Pset_alignment() in a file access property list',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/hdf5-alignment.c'), line_numbers=True, background_color='default')
-                    },
-                    {
-                        'message': 'Any file object greater than or equal in size to threshold bytes will be aligned on an address which is a multiple of alignment'
-                    }
-                )
-
-            if 'LUSTRE' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Consider using a Lustre alignment that matches the file system stripe configuration',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-            )
+        check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules)
 
         #########################################################################################################################################################################
 
         # Redundant read-traffic (based on Phill)
         # POSIX_MAX_BYTE_READ (Highest offset in the file that was read)
         max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
-
-        if max_read_offset > total_read_size:
-            issue = 'Application might have redundant read traffic (more data read than the highest offset)'
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_REDUNDANT_READ_USAGE, TARGET_DEVELOPER, WARN, issue, None)
-            )
-
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
-        if max_write_offset > total_written_size:
-            issue = 'Application might have redundant write traffic (more data written than the highest offset)'
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, None)
-            )
+        check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size)
 
         #########################################################################################################################################################################
 
@@ -502,7 +289,6 @@ def handler(args):
         read_consecutive = df['counters']['POSIX_CONSEC_READS'].sum()
         #print('READ Consecutive: {} ({:.2f}%)'.format(read_consecutive, read_consecutive / total_reads * 100))
 
-
         read_sequential = df['counters']['POSIX_SEQ_READS'].sum()
         read_sequential -= read_consecutive
         #print('READ Sequential: {} ({:.2f}%)'.format(read_sequential, read_sequential / total_reads * 100))
@@ -510,30 +296,6 @@ def handler(args):
         read_random = total_reads - read_consecutive - read_sequential
         #print('READ Random: {} ({:.2f}%)'.format(read_random, read_random / total_reads * 100))
 
-        if total_reads:
-            if read_random and read_random / total_reads > THRESHOLD_RANDOM_OPERATIONS and read_random > THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE:
-                issue = 'Application is issuing a high number ({}) of random read operations ({:.2f}%)'.format(
-                    read_random, read_random / total_reads * 100.0
-                )
-
-                recommendation = [
-                    {
-                        'message': 'Consider changing your data model to have consecutive or sequential reads'
-                    }
-                ]
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-                )
-            else:
-                issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) read requests'.format(
-                    read_consecutive / total_reads * 100.0,
-                    read_sequential / total_reads * 100.0
-                )
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE, TARGET_DEVELOPER, OK, issue, None)
-                )
 
         write_consecutive = df['counters']['POSIX_CONSEC_WRITES'].sum()
 
@@ -543,30 +305,7 @@ def handler(args):
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
-        if total_writes:
-            if write_random and write_random / total_writes > THRESHOLD_RANDOM_OPERATIONS and write_random > THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE:
-                issue = 'Application is issuing a high number ({}) of random write operations ({:.2f}%)'.format(
-                    write_random, write_random / total_writes * 100.0
-                )
-
-                recommendation = [
-                    {
-                        'message': 'Consider changing your data model to have consecutive or sequential writes'
-                    }
-                ]
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation)
-                )
-            else:
-                issue = 'Application mostly uses consecutive ({:.2f}%) and sequential ({:.2f}%) write requests'.format(
-                    write_consecutive / total_writes * 100.0,
-                    write_sequential / total_writes * 100.0
-                )
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE, TARGET_DEVELOPER, OK, issue, None)
-                )
+        check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes)
 
         #########################################################################################################################################################################
 
@@ -594,35 +333,6 @@ def handler(args):
                 shared_files['POSIX_SIZE_READ_100K_1M']
             )
 
-            if total_shared_reads and total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS and total_shared_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-                issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
-                    total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
-                )
-
-                detail = []
-
-                for index, row in shared_files.iterrows():
-                    if row['INSIGHTS_POSIX_SMALL_READS'] > (total_shared_reads * THRESHOLD_SMALL_REQUESTS / 2):
-                        detail.append(
-                            {
-                                'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
-                                    row['INSIGHTS_POSIX_SMALL_READS'],
-                                    row['INSIGHTS_POSIX_SMALL_READS'] / total_shared_reads * 100.0,
-                                    file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                                ) 
-                            }
-                        )
-
-                recommendation = [
-                    {
-                        'message': 'Consider coalesceing read requests into larger more contiguous ones using MPI-IO collective operations',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-read.c'), line_numbers=True, background_color='default')
-                    }
-                ]
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-                )
 
             total_shared_writes = shared_files['POSIX_WRITES'].sum()
             total_shared_writes_small = (
@@ -641,66 +351,13 @@ def handler(args):
                 shared_files['POSIX_SIZE_WRITE_100K_1M']
             )
 
-            if total_shared_writes and total_shared_writes_small / total_shared_writes > THRESHOLD_SMALL_REQUESTS and total_shared_writes_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
-                issue = 'Application issues a high number ({}) of small write requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file write requests'.format(
-                    total_shared_writes_small, total_shared_writes_small / total_shared_writes * 100.0
-                )
-
-                detail = []
-
-                for index, row in shared_files.iterrows():
-                    if row['INSIGHTS_POSIX_SMALL_WRITES'] > (total_shared_writes * THRESHOLD_SMALL_REQUESTS / 2):
-                        detail.append(
-                            {
-                                'message': '{} ({:.2f}%) small writes requests are to "{}"'.format(
-                                    row['INSIGHTS_POSIX_SMALL_WRITES'],
-                                    row['INSIGHTS_POSIX_SMALL_WRITES'] / total_shared_writes * 100.0,
-                                    file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                                ) 
-                            }
-                        )
-
-                recommendation = [
-                    {
-                        'message': 'Consider coalescing write requests into larger more contiguous ones using MPI-IO collective operations',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-write.c'), line_numbers=True, background_color='default')
-                    }
-                ]
-
-                insights_operation.append(
-                    message(args, INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-                )
+            check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
 
         #########################################################################################################################################################################
 
-        has_long_metadata = df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > THRESHOLD_METADATA_TIME_RANK)]
+        count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > THRESHOLD_METADATA_TIME_RANK)])
 
-        if not has_long_metadata.empty:
-            issue = 'There are {} ranks where metadata operations take over {} seconds'.format(
-                len(has_long_metadata), THRESHOLD_METADATA_TIME_RANK
-            )
-
-            recommendation = [
-                {
-                    'message': 'Attempt to combine files, reduce, or cache metadata operations'
-                }
-            ]
-
-            if 'HF5' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since your appplication uses HDF5, try enabling collective metadata calls with H5Pset_coll_metadata_write() and H5Pset_all_coll_metadata_ops()',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/hdf5-collective-metadata.c'), line_numbers=True, background_color='default')
-                    },
-                    {
-                        'message': 'Since your appplication uses HDF5, try using metadata cache to defer metadata operations',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/hdf5-cache.c'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            insights_metadata.append(
-                message(args, INSIGHTS_POSIX_HIGH_METADATA_TIME, TARGET_DEVELOPER, HIGH, issue, recommendation)
-            )
+        check_long_metadata(count_long_metadata, modules)
 
         # We already have a single line for each shared-file access
         # To check for stragglers, we can check the difference between the 
@@ -726,36 +383,9 @@ def handler(args):
                     row['id'], abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
                 ])
 
-        if stragglers_count:
-            issue = 'Detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
-                stragglers_count
-            )
-
-            detail = []
-            
-            for file in detected_files:
-                detail.append(
-                    {
-                        'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
-                            file[1],
-                            file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
-                        ) 
-                    }
-                )
-
-            recommendation = [
-                {
-                    'message': 'Consider better balancing the data transfer between the application ranks'
-                },
-                {
-                    'message': 'Consider tuning how your data is distributed in the file system by changing the stripe size and count',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
-                }
-            ]
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_SIZE_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
-            )
+        column_names = ['id', 'data_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+        check_shared_data_imblance(stragglers_count, detected_files, file_map)
 
         # POSIX_F_FASTEST_RANK_TIME
         # POSIX_F_SLOWEST_RANK_TIME
@@ -781,36 +411,9 @@ def handler(args):
                     row['id'], abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
                 ])
 
-        if stragglers_count:
-            issue = 'Detected time imbalance caused by stragglers when accessing {} shared file.'.format(
-                stragglers_count
-            )
-
-            detail = []
-            
-            for file in detected_files:
-                detail.append(
-                    {
-                        'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
-                            file[1],
-                            file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
-                        ) 
-                    }
-                )
-
-            recommendation = [
-                {
-                    'message': 'Consider better distributing the data in the parallel file system' # needs to review what suggestion to give
-                },
-                {
-                    'message': 'Consider tuning how your data is distributed in the file system by changing the stripe size and count',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
-                }
-            ]
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_TIME_IMBALANCE, TARGET_USER, HIGH, issue, recommendation, detail)
-            )
+        column_names = ['id', 'time_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+        check_shared_time_imbalance(stragglers_count, detected_files, file_map)
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
@@ -837,43 +440,9 @@ def handler(args):
                     row['id'], abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] * 100
                 ])
 
-        if imbalance_count:
-            issue = 'Detected write imbalance when accessing {} individual files'.format(
-                imbalance_count
-            )
-
-            detail = []
-            
-            for file in detected_files:
-                detail.append(
-                    {
-                        'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
-                            file[1],
-                            file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
-                        ) 
-                    }
-                )
-
-            recommendation = [
-                {
-                    'message': 'Consider better balancing the data transfer between the application ranks'
-                },
-                {
-                    'message': 'Consider tuning the stripe size and count to better distribute the data',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
-                },
-                {
-                    'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/pnetcdf-hdf5-no-fill.c'), line_numbers=True, background_color='default')
-                },
-                {
-                    'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
-                }
-            ]
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-            )
+        column_names = ['id', 'write_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+        check_individual_write_imbalance(imbalance_count, detected_files, file_map)
 
         imbalance_count = 0
 
@@ -887,43 +456,9 @@ def handler(args):
                     row['id'], abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] * 100
                 ])
 
-        if imbalance_count:
-            issue = 'Detected read imbalance when accessing {} individual files.'.format(
-                imbalance_count
-            )
-
-            detail = []
-            
-            for file in detected_files:
-                detail.append(
-                    {
-                        'message': 'Load imbalance of {:.2f}% detected while accessing "{}"'.format(
-                            file[1],
-                            file_map[int(file[0])] if args.full_path else os.path.basename(file_map[int(file[0])])
-                        ) 
-                    }
-                )
-
-            recommendation = [
-                {
-                    'message': 'Consider better balancing the data transfer between the application ranks'
-                },
-                {
-                    'message': 'Consider tuning the stripe size and count to better distribute the data',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/lustre-striping.bash'), line_numbers=True, background_color='default')
-                },
-                {
-                    'message': 'If the application uses netCDF and HDF5 double-check the need to set NO_FILL values',
-                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/pnetcdf-hdf5-no-fill.c'), line_numbers=True, background_color='default')
-                },
-                {
-                    'message': 'If rank 0 is the only one opening the file, consider using MPI-IO collectives'
-                }
-            ]
-
-            insights_operation.append(
-                message(args, INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-            )
+        column_names = ['id', 'read_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+        check_individual_read_imbalance(imbalance_count, detected_files, file_map)
 
     #########################################################################################################################################################################
 
@@ -940,95 +475,50 @@ def handler(args):
 
         total_mpiio_read_operations = df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()
 
-        if df_mpiio['counters']['MPIIO_COLL_READS'].sum() == 0:
-            if total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-                issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
-                    df_mpiio['counters']['MPIIO_INDEP_READS'].sum(),
-                    df_mpiio['counters']['MPIIO_INDEP_READS'].sum() / (total_mpiio_read_operations) * 100
-                )
+        mpiio_coll_reads = df_mpiio['counters']['MPIIO_COLL_READS'].sum()
+        mpiio_indep_reads = df_mpiio['counters']['MPIIO_INDEP_READS'].sum()
 
-                detail = []
+        detected_files = []
+        if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
+            for index, row in df_mpiio_collective_reads.iterrows():
+                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
+                    row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and
+                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE):
 
-                files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
+                    detected_files.append([
+                        row['id'], row['MPIIO_INDEP_READS'], row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                    ])
+        
+        column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-                for index, row in df_mpiio_collective_reads.iterrows():
-                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-                        detail.append(
-                            {
-                                'message': '{} ({}%) of independent reads to "{}"'.format(
-                                    row['MPIIO_INDEP_READS'],
-                                    row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100,
-                                    file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                                ) 
-                            }
-                        )
-
-                recommendation = [
-                    {
-                        'message': 'Use collective read operations (e.g. MPI_File_read_all() or MPI_File_read_at_all()) and set one aggregator per compute node',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-read.c'), line_numbers=True, background_color='default')
-                    }
-                ]
-
-                insights_operation.append(
-                    message(args, INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-                )
-        else:
-            issue = 'Application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
-                df_mpiio['counters']['MPIIO_COLL_READS'].sum(),
-                df_mpiio['counters']['MPIIO_COLL_READS'].sum() / (df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()) * 100
-            )
-
-            insights_operation.append(
-                message(args, INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, OK, issue)
-            )
+        check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map)
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
         total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
 
-        if df_mpiio['counters']['MPIIO_COLL_WRITES'].sum() == 0:
-            if total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-                issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
-                    df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum(),
-                    df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() / (total_mpiio_write_operations) * 100
-                )
+        mpi_coll_writes = df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
+        mpi_indep_writes = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum()
 
-                detail = []
+        detected_files = []
+        if mpi_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
-                files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
+            for index, row in df_mpiio_collective_writes.iterrows():
+                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and 
+                    row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and 
+                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE):
 
-                for index, row in df_mpiio_collective_writes.iterrows():
-                    if (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-                        detail.append(
-                            {
-                                'message': '{} ({}%) independent writes to "{}"'.format(
-                                    row['MPIIO_INDEP_WRITES'],
-                                    row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100,
-                                    file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                                ) 
-                            }
-                        )
+                    detected_files.append([
+                        row['id'], row['MPIIO_INDEP_WRITES'], row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                    ])
 
-                recommendation = [
-                    {
-                        'message': 'Use collective write operations (e.g. MPI_File_write_all() or MPI_File_write_at_all()) and set one aggregator per compute node',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-write.c'), line_numbers=True, background_color='default')
-                    }
-                ]
+        column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-                insights_operation.append(
-                    message(args, INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-                )
-        else:
-            issue = 'Application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
-                df_mpiio['counters']['MPIIO_COLL_WRITES'].sum(),
-                df_mpiio['counters']['MPIIO_COLL_WRITES'].sum() / (df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()) * 100
-            )
-
-            insights_operation.append(
-                message(args, INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, OK, issue)
-            )
+        check_mpi_collective_write_operation(mpi_coll_writes, mpi_indep_writes, total_mpiio_write_operations, detected_files, file_map)
 
         #########################################################################################################################################################################
 
@@ -1042,55 +532,10 @@ def handler(args):
             if file_map[int(row['id'])].endswith('.h5') or file_map[int(row['id'])].endswith('.hdf5'):
                 has_hdf5_extension = True
 
-        if df_mpiio['counters']['MPIIO_NB_READS'].sum() == 0:
-            issue = 'Application could benefit from non-blocking (asynchronous) reads'
+        mpiio_nb_reads = df_mpiio['counters']['MPIIO_NB_READS'].sum()
+        mpiio_nb_writes = df_mpiio['counters']['MPIIO_NB_WRITES'].sum()
 
-            recommendation = []
-
-            if 'H5F' in modules or has_hdf5_extension:
-                recommendation.append(
-                    {
-                        'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/hdf5-vol-async-read.c'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            if 'MPI-IO' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations', # (e.g., MPI_File_iread(), MPI_File_read_all_begin/end(), or MPI_File_read_at_all_begin/end())',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-iread.c'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            insights_operation.append(
-                message(args, INSIGHTS_MPI_IO_BLOCKING_READ_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
-            )
-
-        if df_mpiio['counters']['MPIIO_NB_WRITES'].sum() == 0:
-            issue = 'Application could benefit from non-blocking (asynchronous) writes'
-
-            recommendation = []
-
-            if 'H5F' in modules or has_hdf5_extension:
-                recommendation.append(
-                    {
-                        'message': 'Since you use HDF5, consider using the ASYNC I/O VOL connector (https://github.com/hpc-io/vol-async)',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/hdf5-vol-async-write.c'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            if 'MPI-IO' in modules:
-                recommendation.append(
-                    {
-                        'message': 'Since you use MPI-IO, consider non-blocking/asynchronous I/O operations',  # (e.g., MPI_File_iwrite(), MPI_File_write_all_begin/end(), or MPI_File_write_at_all_begin/end())',
-                        'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-iwrite.c'), line_numbers=True, background_color='default')
-                    }
-                )
-
-            insights_operation.append(
-                message(args, INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE, TARGET_DEVELOPER, WARN, issue, recommendation)
-            )
+        check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
 
     #########################################################################################################################################################################
 
@@ -1105,8 +550,6 @@ def handler(args):
             hints = hints.split(';')
 
     # print('Hints: ', hints)
-
-    #########################################################################################################################################################################
 
     NUMBER_OF_COMPUTE_NODES = 0
 
@@ -1141,65 +584,12 @@ def handler(args):
                         NUMBER_OF_COMPUTE_NODES = first['NNodes']
 
                         # Do we have one MPI-IO aggregator per node?
-                        if cb_nodes > NUMBER_OF_COMPUTE_NODES:
-                            issue = 'Application is using inter-node aggregators (which require network communication)'
-
-                            recommendation = [
-                                {
-                                    'message': 'Set the MPI hints for the number of aggregators as one per compute node (e.g., cb_nodes={})'.format(
-                                        NUMBER_OF_COMPUTE_NODES
-                                    ),
-                                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-hints.bash'), line_numbers=True, background_color='default')
-                                }
-                            ]
-
-                            insights_operation.append(
-                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_INTER, TARGET_USER, HIGH, issue, recommendation)
-                            )
-
-                        if cb_nodes < NUMBER_OF_COMPUTE_NODES:
-                            issue = 'Application is using intra-node aggregators'
-
-                            insights_operation.append(
-                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_INTRA, TARGET_USER, OK, issue)
-                            )
-
-                        if cb_nodes == NUMBER_OF_COMPUTE_NODES:
-                            issue = 'Application is using one aggregator per compute node'
-
-                            insights_operation.append(
-                                message(args, INSIGHTS_MPI_IO_AGGREGATORS_OK, TARGET_USER, OK, issue)
-                            )
-
-
+                        check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
                 except StopIteration:
                     pass
         except FileNotFoundError:
             pass
     
-    #########################################################################################################################################################################
-    
-    codes = []
-    if args.json:
-        f = open(args.json)
-        data = json.load(f)
-
-        for key, values in data.items():
-            for value in values:
-                code = value['code']
-                codes.append(code)
-
-                level = value['level']
-                issue = value['issue']
-                recommendation = []
-                for rec in value['recommendations']:
-                    new_message = {'message': rec}
-                    recommendation.append(new_message)
-
-                insights_dxt.append(
-                    message(args, code, TARGET_DEVELOPER, level, issue, recommendation)
-                )
-
     #########################################################################################################################################################################
 
     insights_end_time = time.time()
@@ -1261,153 +651,15 @@ def handler(args):
 
     console.print()
 
-    if insights_metadata:
-        console.print(
-            Panel(
-                Padding(
-                    Group(
-                        *insights_metadata
-                    ),
-                    (1, 1)
-                ),
-                title='METADATA',
-                title_align='left'
-            )
-        )
+    display_content()
+    display_footer(insights_start_time, insights_end_time)
 
-    if insights_operation:
-        console.print(
-            Panel(
-                Padding(
-                    Group(
-                        *insights_operation
-                    ),
-                    (1, 1)
-                ),
-                title='OPERATIONS',
-                title_align='left'
-            )
-        )
+    export_html()
+    export_svg()
 
-    if insights_dxt:
-        console.print(
-            Panel(
-                Padding(
-                    Group(
-                        *insights_dxt
-                    ),
-                    (1, 1)
-                ),
-                title='DXT',
-                title_align='left'
-            )
-        )
-        
-    console.print(
-        Panel(
-            ' {} | [white]LBNL[/white] | [white]Drishti report generated at {} in[/white] {:.3f} seconds'.format(
-                datetime.datetime.now().year,
-                datetime.datetime.now(),
-                insights_end_time - insights_start_time
-            ),
-            box=box.SIMPLE
-        )
+    filename = '{}-summary.csv'.format(
+        args.log_path.replace('.darshan', '')
     )
-
-    if args.export_theme_light:
-        export_theme = TerminalTheme(
-            (255, 255, 255),
-            (0, 0, 0),
-            [
-                (26, 26, 26),
-                (244, 0, 95),
-                (152, 224, 36),
-                (253, 151, 31),
-                (157, 101, 255),
-                (244, 0, 95),
-                (88, 209, 235),
-                (120, 120, 120),
-                (98, 94, 76),
-            ],
-            [
-                (244, 0, 95),
-                (152, 224, 36),
-                (224, 213, 97),
-                (157, 101, 255),
-                (244, 0, 95),
-                (88, 209, 235),
-                (246, 246, 239),
-            ],
-        )
-    else:
-        export_theme = MONOKAI
-
-    if args.export_html:
-        console.save_html(
-            '{}.html'.format(args.log_path),
-            theme=export_theme,
-            clear=False
-        )
-
-    if args.export_svg:
-        console.save_svg(
-            '{}.svg'.format(args.log_path),
-            title='Drishti',
-            theme=export_theme,
-            clear=False
-        )
-
-    if args.export_csv:
-        issues = [
-            'JOB',
-            INSIGHTS_STDIO_HIGH_USAGE,
-            INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE,
-            INSIGHTS_POSIX_READ_COUNT_INTENSIVE,
-            INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE,
-            INSIGHTS_POSIX_READ_SIZE_INTENSIVE,
-            INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE,
-            INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE,
-            INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE,
-            INSIGHTS_POSIX_REDUNDANT_READ_USAGE,
-            INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE,
-            INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE,
-            INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE,
-            INSIGHTS_POSIX_HIGH_METADATA_TIME,
-            INSIGHTS_POSIX_SIZE_IMBALANCE,
-            INSIGHTS_POSIX_TIME_IMBALANCE,
-            INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE,
-            INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE,
-            INSIGHTS_MPI_IO_NO_USAGE,
-            INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE,
-            INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE,
-            INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE,
-            INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
-            INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
-            INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
-            INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
-            INSIGHTS_MPI_IO_AGGREGATORS_INTER,
-            INSIGHTS_MPI_IO_AGGREGATORS_OK
-        ]
-        if codes:
-            issues.extend(codes)
-
-        detected_issues = dict.fromkeys(issues, False)
-        detected_issues['JOB'] = job['job']['jobid']
-
-        for report in csv_report:
-            detected_issues[report] = True
-
-        filename = '{}-summary.csv'.format(
-            args.log_path.replace('.darshan', '')
-        )
-
-        with open(filename, 'w') as f:
-            w = csv.writer(f)
-            w.writerow(detected_issues.keys())
-            w.writerow(detected_issues.values())
+    
+    export_csv(filename, job['job']['jobid'])
 
