@@ -565,35 +565,36 @@ detected_files required columns:
 ['id', 'absolute_indep_reads', 'percent_indep_reads']
 '''
 def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map):
-    if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-        issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
-            mpiio_indep_reads,
-            mpiio_indep_reads / total_mpiio_read_operations * 100
-        )
+    if mpiio_coll_reads == 0:
+        if total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
+                mpiio_indep_reads,
+                mpiio_indep_reads / total_mpiio_read_operations * 100
+            )
 
-        detail = []
+            detail = []
 
-        for index, row in detected_files.iterrows():
-                detail.append(
-                    {
-                        'message': '{} ({}%) of independent reads to "{}"'.format(
-                            row['absolute_indep_reads'],
-                            row['percent_indep_reads'],
-                            file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                        ) 
-                    }
-                )
+            for index, row in detected_files.iterrows():
+                    detail.append(
+                        {
+                            'message': '{} ({}%) of independent reads to "{}"'.format(
+                                row['absolute_indep_reads'],
+                                row['percent_indep_reads'],
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
-        recommendation = [
-            {
-                'message': 'Use collective read operations (e.g. MPI_File_read_all() or MPI_File_read_at_all()) and set one aggregator per compute node',
-                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-read.c'), line_numbers=True, background_color='default')
-            }
-        ]
+            recommendation = [
+                {
+                    'message': 'Use collective read operations (e.g. MPI_File_read_all() or MPI_File_read_at_all()) and set one aggregator per compute node',
+                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-read.c'), line_numbers=True, background_color='default')
+                }
+            ]
 
-        insights_operation.append(
-            message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-        )
+            insights_operation.append(
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+            )
     else:
         issue = 'Application uses MPI-IO and read data using {} ({:.2f}%) collective operations'.format(
             mpiio_coll_reads,
@@ -609,40 +610,41 @@ def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, tot
 detected_files required columns:
 ['id', 'absolute_indep_writes', 'percent_indep_writes']
 '''
-def check_mpi_collective_write_operation(mpi_coll_writes, mpi_indep_writes, total_mpiio_write_operations, detected_files, file_map):
-    if mpi_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
-        issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
-            mpi_indep_writes,
-            mpi_indep_writes / total_mpiio_write_operations * 100
-        )
+def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map):
+    if mpiio_coll_writes == 0:
+        if total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
+                mpiio_indep_writes,
+                mpiio_indep_writes / total_mpiio_write_operations * 100
+            )
 
-        detail = []
+            detail = []
 
-        for index, row in detected_files.iterrows():
-                detail.append(
-                    {
-                        'message': '{} ({}%) independent writes to "{}"'.format(
-                            row['absolute_indep_writes'],
-                            row['percent_indep_writes'],
-                            file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
-                        ) 
-                    }
-                )
+            for index, row in detected_files.iterrows():
+                    detail.append(
+                        {
+                            'message': '{} ({}%) independent writes to "{}"'.format(
+                                row['absolute_indep_writes'],
+                                row['percent_indep_writes'],
+                                file_map[int(row['id'])] if args.full_path else os.path.basename(file_map[int(row['id'])])
+                            ) 
+                        }
+                    )
 
-        recommendation = [
-            {
-                'message': 'Use collective write operations (e.g. MPI_File_write_all() or MPI_File_write_at_all()) and set one aggregator per compute node',
-                'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-write.c'), line_numbers=True, background_color='default')
-            }
-        ]
+            recommendation = [
+                {
+                    'message': 'Use collective write operations (e.g. MPI_File_write_all() or MPI_File_write_at_all()) and set one aggregator per compute node',
+                    'sample': Syntax.from_path(os.path.join(ROOT, 'snippets/mpi-io-collective-write.c'), line_numbers=True, background_color='default')
+                }
+            ]
 
-        insights_operation.append(
-            message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
-        )
+            insights_operation.append(
+                message(INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
+            )
     else:
         issue = 'Application uses MPI-IO and write data using {} ({:.2f}%) collective operations'.format(
-            mpi_coll_writes,
-            mpi_coll_writes / total_mpiio_write_operations * 100
+            mpiio_coll_writes,
+            mpiio_coll_writes / total_mpiio_write_operations * 100
         )
 
         insights_operation.append(

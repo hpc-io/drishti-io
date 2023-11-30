@@ -499,11 +499,11 @@ def handler():
 
         total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
 
-        mpi_coll_writes = df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
-        mpi_indep_writes = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum()
+        mpiio_coll_writes = df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
+        mpiio_indep_writes = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum()
 
         detected_files = []
-        if mpi_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+        if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
             files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
             for index, row in df_mpiio_collective_writes.iterrows():
@@ -518,7 +518,7 @@ def handler():
         column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_write_operation(mpi_coll_writes, mpi_indep_writes, total_mpiio_write_operations, detected_files, file_map)
+        check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map)
 
         #########################################################################################################################################################################
 
