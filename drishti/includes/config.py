@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.terminal_theme import TerminalTheme
 from rich.terminal_theme import MONOKAI
 
-from .parser import *
+from drishti.includes.parser import *
 
 
 RECOMMENDATIONS = 0

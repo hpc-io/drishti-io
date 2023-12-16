@@ -3,7 +3,7 @@
 import os
 import sys
 from subprocess import call
-from .parser import *
+from drishti.includes.parser import *
 
 
 '''
@@ -46,10 +46,10 @@ def main():
     log_type = check_log_type(args.log_path)
     
     if log_type == LOG_TYPE_DARSHAN:
-        from .handle_darshan import handler
+        from drishti.handlers.handle_darshan import handler
 
     elif log_type == LOG_TYPE_RECORDER:
-        from .handle_recorder import handler
+        from drishti.handlers.handle_recorder import handler
     
     handler()
 

@@ -1,4 +1,4 @@
-import setuptools
+from setuptools import setup, find_packages
 
 with open("README.md", "r") as f:
     long_description = f.read()
@@ -6,7 +6,7 @@ with open("README.md", "r") as f:
 with open("requirements.txt") as f:
     requirements = f.readlines()
 
-setuptools.setup(
+setup(
     name="drishti-io",
     keywords="drishti",
     version="0.5",
@@ -23,12 +23,10 @@ setuptools.setup(
         'rich ==12.5.1',
         'recorder-utils',
     ],
-    packages=[
-        'drishti'
-    ],
+    packages=find_packages(),
     package_data={
-        'drishti': [
-            'drishti/snippets/*'
+        'drishti.includes': [
+            'drishti/includes/snippets/*'
         ],
     },
     include_package_data=True,

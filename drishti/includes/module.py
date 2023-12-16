@@ -4,7 +4,7 @@ import datetime
 import csv
 from rich import box
 from rich.syntax import Syntax
-from .config import *
+from drishti.includes.config import *
 
 '''
 Before calling the functions below

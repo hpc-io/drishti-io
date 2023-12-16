@@ -12,7 +12,7 @@ import darshan.backend.cffi_backend as darshanll
 
 from rich import print
 from packaging import version
-from .module import *
+from drishti.includes.module import *
 
 
 def is_available(name):
