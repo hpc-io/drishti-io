@@ -41,26 +41,46 @@ def init_df_posix_recordes(reader):
 
 
 def handler():
-    reader = RecorderReader(args.log_path)
-    df_intervals = build_offset_intervals(reader)
-    df_posix_records = init_df_posix_recordes(reader)
+    df_intervals = None
+    df_posix_records = None
+    df_file_map = None
+    file_map = None
 
-    file_map = get_accessed_files(reader)
+    if os.path.exists(args.log_path + '.intervals.csv') and os.path.exists(args.log_path + '.records.csv') and os.path.exists(args.log_path + '.filemap.csv'):
+        print('using existing parsed log file')
+        df_intervals = pd.read_csv(args.log_path + '.intervals.csv')
+        df_posix_records = pd.read_csv(args.log_path + '.records.csv')
+        df_file_map = pd.read_csv(args.log_path + '.filemap.csv')
+        file_map = {}
+        for index, row in df_file_map.iterrows():
+            file_map[row['file_id']] = row['file_name']
+    else:
+        reader = RecorderReader(args.log_path)
+        df_intervals = build_offset_intervals(reader)
+        df_posix_records = init_df_posix_recordes(reader)
 
-    def add_api(row):
-        if 'MPI' in row['function']:
-            return 'MPI-IO'
-        elif 'H5' in row['function']:
-            return 'H5F'
-        else:
-            return 'POSIX'
+        file_map = get_accessed_files(reader)
 
-    def add_duration(row):
-        return row['end'] - row['start']
-    
-    df_intervals['api'] = df_intervals.apply(add_api, axis=1)
-    df_intervals['duration'] = df_intervals.apply(add_duration, axis=1)
-    df_posix_records['duration'] = df_posix_records.apply(add_duration, axis=1)
+        def add_api(row):
+            if 'MPI' in row['function']:
+                return 'MPI-IO'
+            elif 'H5' in row['function']:
+                return 'H5F'
+            else:
+                return 'POSIX'
+
+        def add_duration(row):
+            return row['end'] - row['start']
+        
+        df_intervals['api'] = df_intervals.apply(add_api, axis=1)
+        df_intervals['duration'] = df_intervals.apply(add_duration, axis=1)
+        df_posix_records['duration'] = df_posix_records.apply(add_duration, axis=1)
+
+        df_intervals.to_csv(args.log_path + '.intervals.csv', mode='w', index=False, header=True)
+        df_posix_records.to_csv(args.log_path + '.records.csv', mode='w', index=False, header=True)
+
+        df_file_map = pd.DataFrame(list(file_map.items()), columns=['file_id', 'file_name'])
+        df_file_map.to_csv(args.log_path + '.filemap.csv', mode='w', index=False, header=True)
 
     if args.split_files:
         for fid in file_map:
