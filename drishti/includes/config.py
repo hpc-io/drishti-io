@@ -88,9 +88,6 @@ DETAILS_MAX_SIZE = 10
 csv_report = []
 codes = []
 
-# TODO: need to verify the threashold to be between 0 and 1
-# TODO: read thresholds from file
-
 
 def init_console():
     console = Console(record=True)
@@ -138,38 +135,47 @@ def set_export_theme():
 
 def load_json():
     codes = []
-    if args.json:
-        f = open(args.json)
-        data = json.load(f)
+    if not args.split_files:
+        if args.json:
+            f = open(args.json)
+            data = json.load(f)
 
-        for key, values in data.items():
-            for value in values:
-                code = value['code']
-                codes.append(code)
+            for key, values in data.items():
+                for value in values:
+                    code = value['code']
+                    codes.append(code)
 
-                level = value['level']
-                issue = value['issue']
-                recommendation = []
-                for rec in value['recommendations']:
-                    new_message = {'message': rec}
-                    recommendation.append(new_message)
+                    level = value['level']
+                    issue = value['issue']
+                    recommendation = []
+                    for rec in value['recommendations']:
+                        new_message = {'message': rec}
+                        recommendation.append(new_message)
 
-                insights_dxt.append(
-                    message(code, TARGET_DEVELOPER, level, issue, recommendation)
-                )
+                    insights_dxt.append(
+                        message(code, TARGET_DEVELOPER, level, issue, recommendation)
+                    )
 
 
 def validate_thresholds():
     """
     Validate thresholds defined by the user.
     """
-    assert(THRESHOLD_OPERATION_IMBALANCE >= 0.0 and THRESHOLD_OPERATION_IMBALANCE <= 1.0)
-    assert(THRESHOLD_SMALL_REQUESTS >= 0.0 and THRESHOLD_SMALL_REQUESTS <= 1.0)
-    assert(THRESHOLD_MISALIGNED_REQUESTS >= 0.0 and THRESHOLD_MISALIGNED_REQUESTS <= 1.0)
-    assert(THRESHOLD_METADATA >= 0.0 and THRESHOLD_METADATA <= 1.0)
-    assert(THRESHOLD_RANDOM_OPERATIONS >= 0.0 and THRESHOLD_RANDOM_OPERATIONS <= 1.0)
+    if args.config:
+        f = open(args.config)
+        data = json.load(f)
 
-    assert(THRESHOLD_METADATA_TIME_RANK >= 0.0)
+        for category, thresholds_spec in data.items():
+            for threshold_name, threshold_value in thresholds_spec.items():
+                globals()[threshold_name] = threshold_value
+
+        assert(THRESHOLD_OPERATION_IMBALANCE >= 0.0 and THRESHOLD_OPERATION_IMBALANCE <= 1.0)
+        assert(THRESHOLD_SMALL_REQUESTS >= 0.0 and THRESHOLD_SMALL_REQUESTS <= 1.0)
+        assert(THRESHOLD_MISALIGNED_REQUESTS >= 0.0 and THRESHOLD_MISALIGNED_REQUESTS <= 1.0)
+        assert(THRESHOLD_METADATA >= 0.0 and THRESHOLD_METADATA <= 1.0)
+        assert(THRESHOLD_RANDOM_OPERATIONS >= 0.0 and THRESHOLD_RANDOM_OPERATIONS <= 1.0)
+
+        assert(THRESHOLD_METADATA_TIME_RANK >= 0.0)
 
 
 def convert_bytes(bytes_number):
@@ -265,6 +271,5 @@ def message(code, target, level, issue, recommendations=None, details=None):
 '''
 Pre-load
 '''
-if not args.split_files:
-    load_json()
-
+load_json()
+validate_thresholds()

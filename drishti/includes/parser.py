@@ -95,4 +95,11 @@ parser.add_argument(
     help='Split the files and generate report for each file'
 )
 
+parser.add_argument(
+    '--config',
+    default=False,
+    dest='config',
+    help='Enable thresholds read from json file'
+)
+
 args = parser.parse_args()

@@ -72,7 +72,6 @@ def check_log_version(console, file, log_version, library_version):
 
 def handler():
     console = init_console()
-    validate_thresholds()
 
     insights_start_time = time.time()
 

@@ -76,7 +76,6 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
     insights_start_time = time.time()
 
     console = init_console()
-    validate_thresholds()
 
     modules = set(df_intervals['api'].unique())
     # Check usage of POSIX, and MPI-IO per file
@@ -433,7 +432,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 for id in file_map.keys():
                     indep_read_count = df_mpiio_reads[~(df_mpiio_reads['function'].str.contains('_all')) & (df_mpiio_reads['file_id'] == id)]
                     indep_write_count = df_mpiio_writes[~(df_mpiio_writes['function'].str.contains('_all')) & (df_mpiio_writes['file_id'] == id)]
-                    indep_total_count = indep_read_count + indep_write_count;
+                    indep_total_count = indep_read_count + indep_write_count
 
                     if (indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE and indep_read_count / indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS):
                         detected_files.append([
@@ -453,7 +452,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 for id in file_map.keys():
                     indep_read_count = df_mpiio_reads[~(df_mpiio_reads['function'].str.contains('_all')) & (df_mpiio_reads['file_id'] == id)]
                     indep_write_count = df_mpiio_writes[~(df_mpiio_writes['function'].str.contains('_all')) & (df_mpiio_writes['file_id'] == id)]
-                    indep_total_count = indep_read_count + indep_write_count;
+                    indep_total_count = indep_read_count + indep_write_count
 
                     if (indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE and indep_write_count / indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS):
                         detected_files.append([
