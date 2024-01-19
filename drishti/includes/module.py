@@ -17,6 +17,15 @@ detected_files: A pandas dataframe
 # Basic usage check
 
 def check_stdio(total_size, total_size_stdio):
+    '''
+    Check whether the application has excessively utilized standard input/output operations
+
+    Parameters:
+        total_size: total I/O size
+        total_size_stdio: total STDIO size
+    
+    '''
+
     if total_size and total_size_stdio / total_size > THRESHOLD_INTERFACE_STDIO:
         issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
             total_size_stdio / total_size * 100.0,
@@ -35,6 +44,13 @@ def check_stdio(total_size, total_size_stdio):
 
 
 def check_mpiio(modules):
+    '''
+    Check whether the application has used MPI-IO or not
+
+    Parameter:
+        modules: all different mudules been used in the application
+    '''
+
     if 'MPI-IO' not in modules:
         issue = 'Application is using low-performance interface'
 
@@ -54,6 +70,15 @@ def check_mpiio(modules):
 
 
 def check_operation_intensive(total_operations, total_reads, total_writes):
+    '''
+    Check whether the application is read or write intensive
+
+    Parameters:
+        total_operations: number of I/O operations been executed by the application
+        total_reads: number of read operations been executed by the application
+        total_writes: number of write operations been executed by the application
+    '''
+
     if total_writes > total_reads and total_operations and abs(total_writes - total_reads) / total_operations > THRESHOLD_OPERATION_IMBALANCE:
         issue = 'Application is write operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
             total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
@@ -74,6 +99,15 @@ def check_operation_intensive(total_operations, total_reads, total_writes):
 
 
 def check_size_intensive(total_size, total_read_size, total_written_size):
+    '''
+    Check whether the application is read size intensive or written size intensive
+
+    Parameters:
+        total_size: Total I/O size measured in byte
+        total_read_size: Input I/O size measured in byte
+        total_written_size: Output I/O size measured in byte
+    '''
+
     if total_written_size > total_read_size and abs(total_written_size - total_read_size) / total_size > THRESHOLD_OPERATION_IMBALANCE:
         issue = 'Application is write size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
             total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
@@ -93,12 +127,22 @@ def check_size_intensive(total_size, total_read_size, total_written_size):
         )
 
 
-'''
-detected_files required columns:
-['id', 'total_reads', 'total_writes']
-detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
-'''
 def check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map):
+    '''
+    Check whether application has performed an excessive number of small operations
+
+    Parameters:
+        total_reads: number of read operations been executed by the application
+        total_reads_small: number of read operations that has small size
+        total_writes: number of write operations been executed by the application
+        total_writes_small: number of write operations that has small size
+        detected_files: 
+            total_reads and total_writes in each file
+            required columns: ['id', 'total_reads', 'total_writes']
+        modules: all different mudules been used in the application
+        file_map: file id and file name pairing
+    '''
+
     if total_reads_small and total_reads_small / total_reads > THRESHOLD_SMALL_REQUESTS and total_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
         issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read requests'.format(
             total_reads_small, total_reads_small / total_reads * 100.0
@@ -189,6 +233,16 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
 
 
 def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules):
+    '''
+    Check whether application has excessive misaligned operations
+
+    Parameters:
+        total_operations: number of I/O operations been executed by the application
+        total_mem_not_aligned: number of memory requests not aligned
+        total_file_not_aligned: number of file requests not aligned
+        modules: all different mudules been used in the application
+    '''
+
     if total_operations and total_mem_not_aligned / total_operations > THRESHOLD_MISALIGNED_REQUESTS:
         issue = 'Application has a high number ({:.2f}%) of misaligned memory requests'.format(
             total_mem_not_aligned / total_operations * 100.0
@@ -234,6 +288,16 @@ def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_ali
 
 
 def check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size):
+    '''
+    Check whether application has redundant read or write traffic
+
+    Parameters:
+        max_read_offset: max offset application is reading from
+        total_read_size: total size application has been read
+        max_write_offset: max offset application is writing to
+        total_written_size: total size application has been written
+    '''
+
     if max_read_offset > total_read_size:
         issue = 'Application might have redundant read traffic (more data read than the highest offset)'
 
@@ -250,6 +314,21 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
 
 
 def check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes):
+    '''
+    Check whether application has performed excessive random operations
+
+    Parameters:
+        read_consecutive: number of consecutive read operations
+        read_sequential: number of sequential read operations
+        read_random: number of random read operations
+        total_read: number of read operations been executed by the application
+        write_consecutive: number of consecutive write operations
+        write_sequential: number of sequential write operations
+        write_random: number of random write operations
+        total_write: number of write operations been executed by the application
+    '''
+
+
     if total_reads:
         if read_random and read_random / total_reads > THRESHOLD_RANDOM_OPERATIONS and read_random > THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE:
             issue = 'Application is issuing a high number ({}) of random read operations ({:.2f}%)'.format(
@@ -301,11 +380,21 @@ def check_random_operation(read_consecutive, read_sequential, read_random, total
             )
 
 
-''''
-The shared_file required columns:
-['id', 'INSIGHTS_POSIX_SMALL_READS', 'INSIGHTS_POSIX_SMALL_WRITES']
-'''
 def check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map):
+    '''
+    Check whether there are excessive small requests in shared files
+
+    Parameters:
+        total_shared_reads: total read operations in shared files
+        total_shared_reads_small: small read operations in shared files
+        total_shared_writes: total write operations in shared files
+        total_shared_writes_small: small write operations in shared files
+        shared_files:
+            small reads an small writes in each shared file
+            required columns: ['id', 'INSIGHTS_POSIX_SMALL_READS', 'INSIGHTS_POSIX_SMALL_WRITES']
+        file_map: file id and file name pairing
+    '''
+
     if total_shared_reads and total_shared_reads_small / total_shared_reads > THRESHOLD_SMALL_REQUESTS and total_shared_reads_small > THRESHOLD_SMALL_REQUESTS_ABSOLUTE:
         issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
             total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
@@ -368,6 +457,14 @@ def check_shared_small_operation(total_shared_reads, total_shared_reads_small, t
 
 
 def check_long_metadata(count_long_metadata, modules):
+    '''
+    Check how many ranks have metadata operations taking too long
+
+    Parameters:
+        count_long_metadata: number of ranks that have metadata operations taking too long
+        modules: all different mudules been used in the application
+    '''
+
     if count_long_metadata > 0:
         issue = 'There are {} ranks where metadata operations take over {} seconds'.format(
             count_long_metadata, THRESHOLD_METADATA_TIME_RANK
@@ -396,11 +493,18 @@ def check_long_metadata(count_long_metadata, modules):
         )
 
 
-'''
-detected_files required columns:
-['id', 'data_imbalance']
-'''
 def check_shared_data_imblance(stragglers_count, detected_files, file_map):
+    '''
+    Check how many shared files containing data transfer imbalance
+
+    Parameters:
+        stragglers_count: number of shared files that contain data transfer imbalane
+        detected_files:
+            data imbalance per file
+            required columns: ['id', 'data_imbalance']
+        file_map: file id and file name pairing
+    '''
+
     if stragglers_count:
         issue = 'Detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
@@ -434,6 +538,15 @@ def check_shared_data_imblance(stragglers_count, detected_files, file_map):
 
 
 def check_shared_data_imblance_split(slowest_rank_bytes, fastest_rank_bytes, total_transfer_size):
+    '''
+    Check whether the specific shared file contains data imbalance
+
+    Parameters:
+        slowest_rank_bytes: the total request size of the rank that takes the longest data operation time
+        fastest_rank_bytes: the total request size of the rank that takes the shortest data operation time
+        total_transfer_size: total request size of that specific shared file
+    '''
+
     if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > THRESHOLD_STRAGGLERS:
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size * 100
@@ -454,11 +567,18 @@ def check_shared_data_imblance_split(slowest_rank_bytes, fastest_rank_bytes, tot
         )
 
 
-'''
-detected_files required columns:
-['id', 'time_imbalance']
-'''
 def check_shared_time_imbalance(stragglers_count, detected_files, file_map):
+    '''
+    Check how many shared files containing time transfer imbalance
+
+    Parameters:
+        stragglers_count: number of shared files that contain time transfer imbalane
+        detected_files:
+            data imbalance per file
+            required columns: ['id', 'time_imbalance']
+        file_map: file id and file name pairing
+    '''
+
     if stragglers_count:
         issue = 'Detected time imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
@@ -492,6 +612,15 @@ def check_shared_time_imbalance(stragglers_count, detected_files, file_map):
 
 
 def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, total_transfer_time):
+    '''
+    Check whether the specific shared file contains time imbalance
+
+    Parameters:
+        slowest_rank_bytes: the total request time of the rank that takes the longest data operation time
+        fastest_rank_bytes: the total request time of the rank that takes the shortest data operation time
+        total_transfer_size: total request time of that specific shared file
+    '''
+
     if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > THRESHOLD_STRAGGLERS:
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(slowest_rank_time - fastest_rank_time) / total_transfer_time * 100
@@ -512,11 +641,17 @@ def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, tota
         )
 
 
-'''
-detected_files required columns:
-['id', 'write_imbalance']
-'''
 def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
+    '''
+    Check how many write imbalance when accessing individual files
+
+    Parameters:
+        imbalance_count: number of individual files that have write imbalance
+        detected_files:
+            write imbalance per file
+            required columns: ['id', 'write_imbalance']
+    '''
+
     if imbalance_count:
         issue = 'Detected write imbalance when accessing {} individual files'.format(
             imbalance_count
@@ -557,6 +692,14 @@ def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
 
 
 def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written):
+    '''
+    Check whether there is write imbalance in the specific individual file
+
+    Parameters:
+        max_bytes_written: max byte written in the file
+        min_bytes_written: minimum byte written in the file
+    '''
+
     if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > THRESHOLD_IMBALANCE:
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(max_bytes_written - min_bytes_written) / max_bytes_written  * 100
@@ -584,11 +727,17 @@ def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written)
         )
 
 
-'''
-detected_files required columns:
-['id', 'read_imbalance']
-'''
 def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
+    '''
+    Check how many read imbalance when accessing individual files
+
+    Parameters:
+        imbalance_count: number of individual files that have read imbalance
+        detected_files:
+            read imbalance per file
+            required columns: ['id', 'read_imbalance']
+    '''
+
     if imbalance_count:
         issue = 'Detected read imbalance when accessing {} individual files.'.format(
             imbalance_count
@@ -629,6 +778,14 @@ def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
 
 
 def check_individual_read_imbalance_split(max_bytes_read, min_bytes_read):
+    '''
+    Check whether there is read imbalance in the specific individual file
+
+    Parameters:
+        max_bytes_written: max byte read in the file
+        min_bytes_written: minimum byte read in the file
+    '''
+
     if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > THRESHOLD_IMBALANCE:
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(max_bytes_read - min_bytes_read) / max_bytes_read  * 100
@@ -658,11 +815,21 @@ def check_individual_read_imbalance_split(max_bytes_read, min_bytes_read):
 
 # MPIIO level check
 
-'''
-detected_files required columns:
-['id', 'absolute_indep_reads', 'percent_indep_reads']
-'''
+
 def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map):
+    '''
+    Check whether application uses collective mpi read calls
+
+    Parameters:
+        mpiio_coll_reads: number of mpiio read operations that are collective
+        mpiio_indep_reads: number of mpiio read operations that are independent
+        total_mpiio_read_operations: total mpiio read operations
+        detected_files:
+            independent read operations and percentage per file
+            required columns: ['id', 'absolute_indep_reads', 'percent_indep_reads']
+        file_map: file id and file name pairing
+    '''
+
     if mpiio_coll_reads == 0:
         if total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
             issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
@@ -704,11 +871,20 @@ def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, tot
         )
 
 
-'''
-detected_files required columns:
-['id', 'absolute_indep_writes', 'percent_indep_writes']
-'''
 def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map):
+    '''
+    Check whether application uses collective mpi write calls
+
+    Parameters:
+        mpiio_coll_writes: number of mpiio write operations that are collective
+        mpiio_indep_writes: number of mpiio write operations that are independent
+        total_mpiio_write_operations: total mpiio write operations
+        detected_files:
+            independent write operations and percentage per file
+            required columns: ['id', 'absolute_indep_writes', 'percent_indep_writes']
+        file_map: file id and file name pairing
+    '''
+
     if mpiio_coll_writes == 0:
         if total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
             issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
@@ -751,6 +927,16 @@ def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, 
 
 
 def check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules):
+    '''
+    Check whether application can benefit from non-blocking requests
+
+    Parameters:
+        mpiio_nb_reads: number of non-blocking mpi read operations
+        mpiio_nb_writes: number of non-blocking mpi write operations
+        has_hdf5_extension: boolean value of whether the file in in hdf5 extension
+        modules: all different mudules been used in the application
+    '''
+
     if mpiio_nb_reads == 0:
         issue = 'Application could benefit from non-blocking (asynchronous) reads'
 
@@ -803,6 +989,14 @@ def check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_ext
 
 
 def check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES):
+    '''
+    Check whether application has used inter-node aggregators
+
+    Parameters:
+        cb_nodes: 
+        NUMBER_OF_COMPUTE_NODES:
+    '''
+
     if cb_nodes > NUMBER_OF_COMPUTE_NODES:
         issue = 'Application is using inter-node aggregators (which require network communication)'
 
@@ -893,6 +1087,9 @@ def display_footer(console, insights_start_time, insights_end_time):
     )
 
 def export_html(console, filename):
+    '''
+    '''
+
     if args.export_html:
         console.save_html(
             filename,
