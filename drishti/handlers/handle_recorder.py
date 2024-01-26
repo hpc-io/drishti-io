@@ -47,7 +47,7 @@ def handler():
     file_map = None
 
     if os.path.exists(args.log_path + '.intervals.csv') and os.path.exists(args.log_path + '.records.csv') and os.path.exists(args.log_path + '.filemap.csv'):
-        print('using existing parsed log file')
+        print('Using existing parsed log file')
         df_intervals = pd.read_csv(args.log_path + '.intervals.csv')
         df_posix_records = pd.read_csv(args.log_path + '.records.csv')
         df_file_map = pd.read_csv(args.log_path + '.filemap.csv')
@@ -174,16 +174,16 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
 
         # Get the number of small I/O operations (less than 1 MB)
 
-        total_reads_small = len(df_posix[(df_posix['function'].str.contains('read')) & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
-        total_writes_small = len(df_posix[~(df_posix['function'].str.contains('read')) & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+        total_reads_small = len(df_posix[(df_posix['function'].str.contains('read')) & (df_posix['size'] < small_bytes)])
+        total_writes_small = len(df_posix[~(df_posix['function'].str.contains('read')) & (df_posix['size'] < small_bytes)])
 
         if args.split_files:
             detected_files = pd.DataFrame()
         else:
             detected_files = []
             for id in file_map.keys():
-                read_cnt = len(df_posix[(df_posix['file_id'] == id) & (df_posix['function'].str.contains('read')) & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
-                write_cnt = len(df_posix[(df_posix['file_id'] == id) & ~(df_posix['function'].str.contains('read')) & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+                read_cnt = len(df_posix[(df_posix['file_id'] == id) & (df_posix['function'].str.contains('read')) & (df_posix['size'] < small_bytes)])
+                write_cnt = len(df_posix[(df_posix['file_id'] == id) & ~(df_posix['function'].str.contains('read')) & (df_posix['size'] < small_bytes)])
                 detected_files.append([id, read_cnt, write_cnt])
 
             column_names = ['id', 'total_reads', 'total_writes']
@@ -258,12 +258,12 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
         total_shared_reads = len(df_posix[(df_posix['file_id'].isin(shared_files)) & (df_posix['function'].str.contains('read'))])
         total_shared_reads_small = len(df_posix[(df_posix['file_id'].isin(shared_files)) 
                                     & (df_posix['function'].str.contains('read')) 
-                                    & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+                                    & (df_posix['size'] < small_bytes)])
         
         total_shared_writes = len(df_posix[(df_posix['file_id'].isin(shared_files)) & ~(df_posix['function'].str.contains('read'))])
         total_shared_writes_small = len(df_posix[(df_posix['file_id'].isin(shared_files)) 
                                     & ~(df_posix['function'].str.contains('read')) 
-                                    & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+                                    & (df_posix['size'] < small_bytes)])
 
         if args.split_files:
             detected_files = pd.DataFrame()
@@ -272,10 +272,10 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
             for id in shared_files:
                 read_cnt = len(df_posix[(df_posix['file_id'] == id) 
                                         & (df_posix['function'].str.contains('read')) 
-                                        & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+                                        & (df_posix['size'] < small_bytes)])
                 write_cnt = len(df_posix[(df_posix['file_id'] == id) 
                                         & ~(df_posix['function'].str.contains('read')) 
-                                        & (df_posix['size'] < THRESHOLD_SMALL_BYTES)])
+                                        & (df_posix['size'] < small_bytes)])
                 detected_files.append([id, read_cnt, write_cnt])
             
             column_names = ['id', 'INSIGHTS_POSIX_SMALL_READS', 'INSIGHTS_POSIX_SMALL_WRITES']
@@ -287,7 +287,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
 
         # TODO: Assumed metadata operations: open, close, sync, create, seek
         df_detected = df_posix_records.groupby('rank')['duration'].sum().reset_index()
-        count_long_metadata = len(df_detected[(df_detected['duration'] > THRESHOLD_METADATA_TIME_RANK)])
+        count_long_metadata = len(df_detected[(df_detected['duration'] > metadata_time_rank)])
 
         check_long_metadata(count_long_metadata, modules)
   
@@ -318,7 +318,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 slowest_rank_bytes = df_detected.loc[df_detected['duration'].idxmax(), 'size']
                 fastest_rank_bytes = df_detected.loc[df_detected['duration'].idxmin(), 'size']
 
-                if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > THRESHOLD_STRAGGLERS:
+                if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > imbalance_stragglers:
                     stragglers_count += 1
 
                     detected_files.append([
@@ -356,7 +356,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 slowest_rank_time = df_detected['duration'].max()
                 fastest_rank_time = df_detected['duration'].min()
 
-                if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > THRESHOLD_STRAGGLERS:
+                if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > imbalance_stragglers:
                     stragglers_count += 1
 
                     detected_files.append([
@@ -396,7 +396,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 max_bytes_written = df_detected['size'].max()
                 min_bytes_written = df_detected['size'].min()
 
-                if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > THRESHOLD_IMBALANCE:
+                if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > imbalance_size:
                     imbalance_count += 1
 
                     detected_files.append([
@@ -417,7 +417,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                 max_bytes_read = df_detected['size'].max()
                 min_bytes_read = df_detected['size'].min()
 
-                if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > THRESHOLD_IMBALANCE:
+                if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > imbalance_size:
                     imbalance_count += 1
 
                     detected_files.append([
@@ -448,13 +448,13 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
             detected_files = pd.DataFrame()
         else:
             detected_files = []
-            if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > collective_operations_absolute:
                 for id in file_map.keys():
                     indep_read_count = df_mpiio_reads[~(df_mpiio_reads['function'].str.contains('_all')) & (df_mpiio_reads['file_id'] == id)]
                     indep_write_count = df_mpiio_writes[~(df_mpiio_writes['function'].str.contains('_all')) & (df_mpiio_writes['file_id'] == id)]
                     indep_total_count = indep_read_count + indep_write_count
 
-                    if (indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE and indep_read_count / indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS):
+                    if (indep_total_count > collective_operations_absolute and indep_read_count / indep_total_count > collective_operations):
                         detected_files.append([
                             id, indep_read_count, indep_read_count / indep_total_count * 100
                         ])
@@ -468,13 +468,13 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
             detected_files = pd.DataFrame()
         else:
             detected_files = []
-            if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+            if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > collective_operations_absolute:
                 for id in file_map.keys():
                     indep_read_count = df_mpiio_reads[~(df_mpiio_reads['function'].str.contains('_all')) & (df_mpiio_reads['file_id'] == id)]
                     indep_write_count = df_mpiio_writes[~(df_mpiio_writes['function'].str.contains('_all')) & (df_mpiio_writes['file_id'] == id)]
                     indep_total_count = indep_read_count + indep_write_count
 
-                    if (indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE and indep_write_count / indep_total_count > THRESHOLD_COLLECTIVE_OPERATIONS):
+                    if (indep_total_count > collective_operations_absolute and indep_write_count / indep_total_count > collective_operations):
                         detected_files.append([
                             id, indep_write_count, indep_write_count / indep_total_count * 100
                         ])

@@ -354,7 +354,7 @@ def handler():
 
         #########################################################################################################################################################################
 
-        count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > THRESHOLD_METADATA_TIME_RANK)])
+        count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > metadata_time_rank)])
 
         check_long_metadata(count_long_metadata, modules)
 
@@ -375,7 +375,7 @@ def handler():
         for index, row in shared_files.iterrows():
             total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
 
-            if total_transfer_size and abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > THRESHOLD_STRAGGLERS:
+            if total_transfer_size and abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > imbalance_stragglers:
                 stragglers_count += 1
 
                 detected_files.append([
@@ -403,7 +403,7 @@ def handler():
         for index, row in shared_files_times.iterrows():
             total_transfer_time = row['POSIX_F_WRITE_TIME'] + row['POSIX_F_READ_TIME'] + row['POSIX_F_META_TIME']
 
-            if total_transfer_time and abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > THRESHOLD_STRAGGLERS:
+            if total_transfer_time and abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > imbalance_stragglers:
                 stragglers_count += 1
 
                 detected_files.append([
@@ -432,7 +432,7 @@ def handler():
         detected_files = []
 
         for index, row in aggregated.iterrows():
-            if row['POSIX_BYTES_WRITTEN_max'] and abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] > THRESHOLD_IMBALANCE:
+            if row['POSIX_BYTES_WRITTEN_max'] and abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] > imbalance_size:
                 imbalance_count += 1
 
                 detected_files.append([
@@ -448,7 +448,7 @@ def handler():
         detected_files = []
 
         for index, row in aggregated.iterrows():
-            if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] > THRESHOLD_IMBALANCE:
+            if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] > imbalance_size:
                 imbalance_count += 1
 
                 detected_files.append([
@@ -478,12 +478,12 @@ def handler():
         mpiio_indep_reads = df_mpiio['counters']['MPIIO_INDEP_READS'].sum()
 
         detected_files = []
-        if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+        if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > collective_operations_absolute:
             files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
             for index, row in df_mpiio_collective_reads.iterrows():
                 if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
-                    row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and
-                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE):
+                    row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > collective_operations and
+                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > collective_operations_absolute):
 
                     detected_files.append([
                         row['id'], row['MPIIO_INDEP_READS'], row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
@@ -502,13 +502,13 @@ def handler():
         mpiio_indep_writes = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum()
 
         detected_files = []
-        if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE:
+        if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > collective_operations_absolute:
             files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
             for index, row in df_mpiio_collective_writes.iterrows():
                 if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and 
-                    row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS and 
-                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE):
+                    row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > collective_operations and 
+                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > collective_operations_absolute):
 
                     detected_files.append([
                         row['id'], row['MPIIO_INDEP_WRITES'], row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100

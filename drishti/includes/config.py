@@ -34,20 +34,19 @@ insights_total[HIGH] = 0
 insights_total[WARN] = 0
 insights_total[RECOMMENDATIONS] = 0
 
-THRESHOLD_OPERATION_IMBALANCE = 0.1
-THRESHOLD_SMALL_REQUESTS = 0.1
-THRESHOLD_SMALL_REQUESTS_ABSOLUTE = 1000
-THRESHOLD_MISALIGNED_REQUESTS = 0.1
-THRESHOLD_METADATA = 0.1
-THRESHOLD_METADATA_TIME_RANK = 30  # seconds
-THRESHOLD_RANDOM_OPERATIONS = 0.2
-THRESHOLD_RANDOM_OPERATIONS_ABSOLUTE = 1000
-THRESHOLD_STRAGGLERS = 0.15
-THRESHOLD_IMBALANCE = 0.30
-THRESHOLD_INTERFACE_STDIO = 0.1
-THRESHOLD_COLLECTIVE_OPERATIONS = 0.5
-THRESHOLD_COLLECTIVE_OPERATIONS_ABSOLUTE = 1000
-THRESHOLD_SMALL_BYTES = 1048576 # 1 MB
+imbalance_operations = 0.1
+small_bytes = 1048576 # 1MB
+small_requests = 0.1
+small_requests_absolute = 1000
+misaligned_requests = 0.1
+metadata_time_rank = 30 # seconds
+random_operations = 0.2
+random_operations_absolute = 1000
+imbalance_stragglers = 0.15
+imbalance_size = 0.30
+interface_stdio = 0.1
+collective_operations = 0.5
+collective_operations_absolute = 1000
 
 INSIGHTS_STDIO_HIGH_USAGE = 'S01'
 INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
@@ -169,13 +168,12 @@ def validate_thresholds():
             for threshold_name, threshold_value in thresholds_spec.items():
                 globals()[threshold_name] = threshold_value
 
-        assert(THRESHOLD_OPERATION_IMBALANCE >= 0.0 and THRESHOLD_OPERATION_IMBALANCE <= 1.0)
-        assert(THRESHOLD_SMALL_REQUESTS >= 0.0 and THRESHOLD_SMALL_REQUESTS <= 1.0)
-        assert(THRESHOLD_MISALIGNED_REQUESTS >= 0.0 and THRESHOLD_MISALIGNED_REQUESTS <= 1.0)
-        assert(THRESHOLD_METADATA >= 0.0 and THRESHOLD_METADATA <= 1.0)
-        assert(THRESHOLD_RANDOM_OPERATIONS >= 0.0 and THRESHOLD_RANDOM_OPERATIONS <= 1.0)
+        assert(imbalance_operations >= 0.0 and imbalance_operations <= 1.0)
+        assert(small_requests >= 0.0 and small_requests <= 1.0)
+        assert(misaligned_requests >= 0.0 and misaligned_requests <= 1.0)
+        assert(random_operations >= 0.0 and random_operations <= 1.0)
 
-        assert(THRESHOLD_METADATA_TIME_RANK >= 0.0)
+        assert(metadata_time_rank >= 0.0)
 
 
 def convert_bytes(bytes_number):
