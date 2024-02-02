@@ -57,6 +57,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--threshold',
+    default=False,
+    action='store_true',
+    dest='thold',
+    help='Display all thresholds used for the report'
+)
+
+parser.add_argument(
     '--code',
     default=False,
     action='store_true',

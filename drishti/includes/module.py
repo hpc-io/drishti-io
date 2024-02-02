@@ -26,7 +26,8 @@ def check_stdio(total_size, total_size_stdio):
     
     '''
 
-    if total_size and total_size_stdio / total_size > interface_stdio:
+    if total_size and total_size_stdio / total_size > thresholds['interface_stdio'][0]:
+        thresholds['interface_stdio'][1] = True
         issue = 'Application is using STDIO, a low-performance interface, for {:.2f}% of its data transfers ({})'.format(
             total_size_stdio / total_size * 100.0,
             convert_bytes(total_size_stdio)
@@ -79,7 +80,7 @@ def check_operation_intensive(total_operations, total_reads, total_writes):
         total_writes: number of write operations been executed by the application
     '''
 
-    if total_writes > total_reads and total_operations and abs(total_writes - total_reads) / total_operations > imbalance_operations:
+    if total_writes > total_reads and total_operations and abs(total_writes - total_reads) / total_operations > thresholds['imbalance_operations'][0]:
         issue = 'Application is write operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
             total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
         )
@@ -88,7 +89,7 @@ def check_operation_intensive(total_operations, total_reads, total_writes):
             message(INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
-    if total_reads > total_writes and total_operations and abs(total_writes - total_reads) / total_operations > imbalance_operations:
+    if total_reads > total_writes and total_operations and abs(total_writes - total_reads) / total_operations > thresholds['imbalance_operations'][0]:
         issue = 'Application is read operation intensive ({:.2f}% writes vs. {:.2f}% reads)'.format(
             total_writes / total_operations * 100.0, total_reads / total_operations * 100.0
         )
@@ -108,7 +109,7 @@ def check_size_intensive(total_size, total_read_size, total_written_size):
         total_written_size: Output I/O size measured in byte
     '''
 
-    if total_written_size > total_read_size and abs(total_written_size - total_read_size) / total_size > imbalance_operations:
+    if total_written_size > total_read_size and abs(total_written_size - total_read_size) / total_size > thresholds['imbalance_operations'][0]:
         issue = 'Application is write size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
             total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
         )
@@ -117,7 +118,7 @@ def check_size_intensive(total_size, total_read_size, total_written_size):
             message(INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE, TARGET_DEVELOPER, INFO, issue, None)
         )
 
-    if total_read_size > total_written_size and abs(total_written_size - total_read_size) / total_size > imbalance_operations:
+    if total_read_size > total_written_size and abs(total_written_size - total_read_size) / total_size > thresholds['imbalance_operations'][0]:
         issue = 'Application is read size intensive ({:.2f}% write vs. {:.2f}% read)'.format(
             total_written_size / total_size * 100.0, total_read_size / total_size * 100.0
         )
@@ -143,7 +144,8 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
         file_map: file id and file name pairing
     '''
 
-    if total_reads_small and total_reads_small / total_reads > small_requests and total_reads_small > small_requests_absolute:
+    if total_reads_small and total_reads_small / total_reads > thresholds['small_requests'][0] and total_reads_small > thresholds['small_requests_absolute'][0]:
+        thresholds['small_requests_absolute'][1] = True
         issue = 'Application issues a high number ({}) of small read requests (i.e., < 1MB) which represents {:.2f}% of all read requests'.format(
             total_reads_small, total_reads_small / total_reads * 100.0
         )
@@ -152,7 +154,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
         recommendation = []
 
         for index, row in detected_files.iterrows():
-            if row['total_reads'] > (total_reads * small_requests / 2):
+            if row['total_reads'] > (total_reads * thresholds['small_requests'][0] / 2):
                 detail.append(
                     {
                         'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
@@ -187,7 +189,8 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
             message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
         )
 
-    if total_writes_small and total_writes_small / total_writes > small_requests and total_writes_small > small_requests_absolute:
+    if total_writes_small and total_writes_small / total_writes > thresholds['small_requests'][0] and total_writes_small > thresholds['small_requests_absolute'][0]:
+        thresholds['small_requests_absolute'][1] = True
         issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all write requests'.format(
             total_writes_small, total_writes_small / total_writes * 100.0
         )
@@ -196,7 +199,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
         recommendation = []
 
         for index, row in detected_files.iterrows():
-            if row['total_writes'] > (total_writes * small_requests / 2):
+            if row['total_writes'] > (total_writes * thresholds['small_requests'][0] / 2):
                 detail.append(
                     {
                         'message': '{} ({:.2f}%) small write requests are to "{}"'.format(
@@ -243,7 +246,8 @@ def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_ali
         modules: all different mudules been used in the application
     '''
 
-    if total_operations and total_mem_not_aligned / total_operations > misaligned_requests:
+    if total_operations and total_mem_not_aligned / total_operations > thresholds['misaligned_requests'][0]:
+        thresholds['misaligned_requests'][1] = True
         issue = 'Application has a high number ({:.2f}%) of misaligned memory requests'.format(
             total_mem_not_aligned / total_operations * 100.0
         )
@@ -252,7 +256,8 @@ def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_ali
             message(INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE, TARGET_DEVELOPER, HIGH, issue, None)
         )
 
-    if total_operations and total_file_not_aligned / total_operations > misaligned_requests:
+    if total_operations and total_file_not_aligned / total_operations > thresholds['misaligned_requests'][0]:
+        thresholds['misaligned_requests'][1] = True
         issue = 'Application issues a high number ({:.2f}%) of misaligned file requests'.format(
             total_file_not_aligned / total_operations * 100.0
         )
@@ -330,7 +335,9 @@ def check_random_operation(read_consecutive, read_sequential, read_random, total
 
 
     if total_reads:
-        if read_random and read_random / total_reads > random_operations and read_random > random_operations_absolute:
+        if read_random and read_random / total_reads > thresholds['random_operations'][0] and read_random > thresholds['random_operations_absolute'][0]:
+            thresholds['random_operations'][1] = True
+            thresholds['random_operations_absolute'][1] = True
             issue = 'Application is issuing a high number ({}) of random read operations ({:.2f}%)'.format(
                 read_random, read_random / total_reads * 100.0
             )
@@ -355,7 +362,9 @@ def check_random_operation(read_consecutive, read_sequential, read_random, total
             )
 
     if total_writes:
-        if write_random and write_random / total_writes > random_operations and write_random > random_operations_absolute:
+        if write_random and write_random / total_writes > thresholds['random_operations'][0] and write_random > thresholds['random_operations_absolute'][0]:
+            thresholds['random_operations'][1] = True
+            thresholds['random_operations_absolute'][1] = True
             issue = 'Application is issuing a high number ({}) of random write operations ({:.2f}%)'.format(
                 write_random, write_random / total_writes * 100.0
             )
@@ -395,7 +404,9 @@ def check_shared_small_operation(total_shared_reads, total_shared_reads_small, t
         file_map: file id and file name pairing
     '''
 
-    if total_shared_reads and total_shared_reads_small / total_shared_reads > small_requests and total_shared_reads_small > small_requests_absolute:
+    if total_shared_reads and total_shared_reads_small / total_shared_reads > thresholds['small_requests'][0] and total_shared_reads_small > thresholds['small_requests_absolute'][0]:
+        thresholds['small_requests'][1] = True
+        thresholds['small_requests_absolute'][1] = True
         issue = 'Application issues a high number ({}) of small read requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file read requests'.format(
             total_shared_reads_small, total_shared_reads_small / total_shared_reads * 100.0
         )
@@ -403,7 +414,7 @@ def check_shared_small_operation(total_shared_reads, total_shared_reads_small, t
         detail = []
 
         for index, row in shared_files.iterrows():
-            if row['INSIGHTS_POSIX_SMALL_READS'] > (total_shared_reads * small_requests / 2):
+            if row['INSIGHTS_POSIX_SMALL_READS'] > (total_shared_reads * thresholds['small_requests'][0] / 2):
                 detail.append(
                     {
                         'message': '{} ({:.2f}%) small read requests are to "{}"'.format(
@@ -425,7 +436,9 @@ def check_shared_small_operation(total_shared_reads, total_shared_reads_small, t
             message(INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE, TARGET_DEVELOPER, HIGH, issue, recommendation, detail)
         )
 
-    if total_shared_writes and total_shared_writes_small / total_shared_writes > small_requests and total_shared_writes_small > small_requests_absolute:
+    if total_shared_writes and total_shared_writes_small / total_shared_writes > thresholds['small_requests'][0] and total_shared_writes_small > thresholds['small_requests_absolute'][0]:
+        thresholds['small_requests'][1] = True
+        thresholds['small_requests_absolute'][1] = True
         issue = 'Application issues a high number ({}) of small write requests to a shared file (i.e., < 1MB) which represents {:.2f}% of all shared file write requests'.format(
             total_shared_writes_small, total_shared_writes_small / total_shared_writes * 100.0
         )
@@ -433,7 +446,7 @@ def check_shared_small_operation(total_shared_reads, total_shared_reads_small, t
         detail = []
 
         for index, row in shared_files.iterrows():
-            if row['INSIGHTS_POSIX_SMALL_WRITES'] > (total_shared_writes * small_requests / 2):
+            if row['INSIGHTS_POSIX_SMALL_WRITES'] > (total_shared_writes * thresholds['small_requests'][0] / 2):
                 detail.append(
                     {
                         'message': '{} ({:.2f}%) small writes requests are to "{}"'.format(
@@ -466,8 +479,9 @@ def check_long_metadata(count_long_metadata, modules):
     '''
 
     if count_long_metadata > 0:
+        thresholds['metadata_time_rank'][1] = True
         issue = 'There are {} ranks where metadata operations take over {} seconds'.format(
-            count_long_metadata, metadata_time_rank
+            count_long_metadata, thresholds['metadata_time_rank'][0]
         )
 
         recommendation = [
@@ -506,6 +520,7 @@ def check_shared_data_imblance(stragglers_count, detected_files, file_map):
     '''
 
     if stragglers_count:
+        thresholds['imbalance_stragglers'][1] = True
         issue = 'Detected data transfer imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
         )
@@ -547,7 +562,8 @@ def check_shared_data_imblance_split(slowest_rank_bytes, fastest_rank_bytes, tot
         total_transfer_size: total request size of that specific shared file
     '''
 
-    if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > imbalance_stragglers:
+    if total_transfer_size and abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size > thresholds['imbalance_stragglers'][0]:
+        thresholds['imbalance_stragglers'][1] = True
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(slowest_rank_bytes - fastest_rank_bytes) / total_transfer_size * 100
         )
@@ -580,6 +596,7 @@ def check_shared_time_imbalance(stragglers_count, detected_files, file_map):
     '''
 
     if stragglers_count:
+        thresholds['imbalance_stragglers'][1] = True
         issue = 'Detected time imbalance caused by stragglers when accessing {} shared file.'.format(
             stragglers_count
         )
@@ -621,7 +638,8 @@ def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, tota
         total_transfer_size: total request time of that specific shared file
     '''
 
-    if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > imbalance_stragglers:
+    if total_transfer_time and abs(slowest_rank_time - fastest_rank_time) / total_transfer_time > thresholds['imbalance_stragglers'][0]:
+        thresholds['imbalance_stragglers'][1] = True
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(slowest_rank_time - fastest_rank_time) / total_transfer_time * 100
         )
@@ -653,6 +671,7 @@ def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
     '''
 
     if imbalance_count:
+        thresholds['imbalance_size'][1] = True
         issue = 'Detected write imbalance when accessing {} individual files'.format(
             imbalance_count
         )
@@ -700,7 +719,8 @@ def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written)
         min_bytes_written: minimum byte written in the file
     '''
 
-    if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > imbalance_size:
+    if max_bytes_written and abs(max_bytes_written - min_bytes_written) / max_bytes_written > thresholds['imbalance_size'][0]:
+        thresholds['imbalance_size'][1] = True
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(max_bytes_written - min_bytes_written) / max_bytes_written  * 100
         )
@@ -739,6 +759,7 @@ def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
     '''
 
     if imbalance_count:
+        thresholds['imbalance_size'][1] = True
         issue = 'Detected read imbalance when accessing {} individual files.'.format(
             imbalance_count
         )
@@ -786,7 +807,8 @@ def check_individual_read_imbalance_split(max_bytes_read, min_bytes_read):
         min_bytes_written: minimum byte read in the file
     '''
 
-    if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > imbalance_size:
+    if max_bytes_read and abs(max_bytes_read - min_bytes_read) / max_bytes_read > thresholds['imbalance_size'][0]:
+        thresholds['imbalance_size'][1] = True
         issue = 'Load imbalance of {:.2f}% detected'.format(
             abs(max_bytes_read - min_bytes_read) / max_bytes_read  * 100
         )
@@ -831,7 +853,8 @@ def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, tot
     '''
 
     if mpiio_coll_reads == 0:
-        if total_mpiio_read_operations and total_mpiio_read_operations > collective_operations_absolute:
+        if total_mpiio_read_operations and total_mpiio_read_operations > thresholds['collective_operations_absolute'][0]:
+            thresholds['collective_operations_absolute'][1] = True
             issue = 'Application uses MPI-IO but it does not use collective read operations, instead it issues {} ({:.2f}%) independent read calls'.format(
                 mpiio_indep_reads,
                 mpiio_indep_reads / total_mpiio_read_operations * 100
@@ -886,7 +909,8 @@ def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, 
     '''
 
     if mpiio_coll_writes == 0:
-        if total_mpiio_write_operations and total_mpiio_write_operations > collective_operations_absolute:
+        if total_mpiio_write_operations and total_mpiio_write_operations > thresholds['collective_operations_absolute'][0]:
+            thresholds['collective_operations_absolute'][1] = True
             issue = 'Application uses MPI-IO but it does not use collective write operations, instead it issues {} ({:.2f}%) independent write calls'.format(
                 mpiio_indep_writes,
                 mpiio_indep_writes / total_mpiio_write_operations * 100
@@ -1072,6 +1096,42 @@ def display_content(console):
                 title_align='left'
             )
         )
+
+
+def display_thresholds(console):
+    tholdMessage = {
+        'imbalance_operations': 'Minimum imbalance requests ratio:                [white]{}%[/white]'.format(thresholds['imbalance_operations'][0] * 100),
+        'small_bytes': 'Minimum size of a small request:                 [white]{} bytes[/white]'.format(thresholds['small_bytes'][0]),
+        'small_requests': 'Maximum small requests ratio:                    [white]{}%[/white]'.format(thresholds['small_requests'][0] * 100),
+        'small_requests_absolute': 'Maximum small requests:                          [white]{}[/white]'.format(thresholds['small_requests_absolute'][0]),
+        'misaligned_requests': 'Maximum misaligned requests ratio:               [white]{}%[/white]'.format(thresholds['misaligned_requests'][0] * 100),
+        'random_operations': 'Maximum random request ratio:                    [white]{}%[/white]'.format(thresholds['random_operations'][0] * 100),
+        'random_operations_absolute': 'Maximum random requests:                         [white]{}[/white]'.format(thresholds['random_operations_absolute'][0]),
+        'metadata_time_rank': 'Maximum metadata process time per rank:          [white]{} seconds[/white]'.format(thresholds['metadata_time_rank'][0]),
+        'imbalance_size': 'Maximum read/write size difference ratio:        [white]{}%[/white]'.format(thresholds['imbalance_size'][0] * 100),
+        'imbalance_stragglers': 'Maximum ratio difference among ranks:            [white]{}%[/white]'.format(thresholds['imbalance_stragglers'][0] * 100),
+        'interface_stdio': 'Maximum STDIO usage ratio:                       [white]{}%[/white]'.format(thresholds['interface_stdio'][0] * 100),
+        'collective_operations': 'Minimum MPI collective operation usage ratio:    [white]{}%[/white]'.format(thresholds['collective_operations'][0] * 100),
+        'collective_operations_absolute': 'Minimum MPI collective operations:               [white]{}[/white]'.format(thresholds['collective_operations_absolute'][0]),
+    }
+
+    toBeAppend = []
+    if args.thold:
+        for name, message in tholdMessage.items():
+            toBeAppend.append(message)
+    else:
+        for name, message in tholdMessage.items():
+            if thresholds[name][1]:
+                toBeAppend.append(message)
+
+    console.print(
+        Panel(
+            '\n'.join(toBeAppend),
+            title='THRESHOLDS',
+            title_align='left',
+            padding=1
+        )
+    )
 
 
 def display_footer(console, insights_start_time, insights_end_time):

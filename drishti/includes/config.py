@@ -34,19 +34,21 @@ insights_total[HIGH] = 0
 insights_total[WARN] = 0
 insights_total[RECOMMENDATIONS] = 0
 
-imbalance_operations = 0.1
-small_bytes = 1048576 # 1MB
-small_requests = 0.1
-small_requests_absolute = 1000
-misaligned_requests = 0.1
-metadata_time_rank = 30 # seconds
-random_operations = 0.2
-random_operations_absolute = 1000
-imbalance_stragglers = 0.15
-imbalance_size = 0.30
-interface_stdio = 0.1
-collective_operations = 0.5
-collective_operations_absolute = 1000
+thresholds = {
+    'imbalance_operations': [0.1, False],
+    'small_bytes': [1048576, False],
+    'small_requests': [0.1, False],
+    'small_requests_absolute': [1000, False],
+    'misaligned_requests': [0.1, False],
+    'metadata_time_rank': [30, False],
+    'random_operations': [0.2, False],
+    'random_operations_absolute': [1000, False],
+    'imbalance_stragglers': [0.15, False],
+    'imbalance_size': [0.3, False],
+    'interface_stdio': [0.1, False],
+    'collective_operations': [0.5, False],
+    'collective_operations_absolute': [1000, False],
+}
 
 INSIGHTS_STDIO_HIGH_USAGE = 'S01'
 INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE = 'P01'
@@ -98,6 +100,10 @@ def init_console():
     insights_total[HIGH] = 0
     insights_total[WARN] = 0
     insights_total[RECOMMENDATIONS] = 0
+
+    for name in thresholds:
+        thresholds[name][1] = False
+
     return console
 
 
@@ -166,14 +172,14 @@ def validate_thresholds():
 
         for category, thresholds_spec in data.items():
             for threshold_name, threshold_value in thresholds_spec.items():
-                globals()[threshold_name] = threshold_value
+                thresholds[category + '_' + threshold_name][0] = threshold_value
+                
+        assert(thresholds['imbalance_operations'][0] >= 0.0 and thresholds['imbalance_operations'][0] <= 1.0)
+        assert(thresholds['small_requests'][0] >= 0.0 and thresholds['small_requests'][0] <= 1.0)
+        assert(thresholds['misaligned_requests'][0] >= 0.0 and thresholds['misaligned_requests'][0] <= 1.0)
+        assert(thresholds['random_operations'][0] >= 0.0 and thresholds['random_operations'][0] <= 1.0)
 
-        assert(imbalance_operations >= 0.0 and imbalance_operations <= 1.0)
-        assert(small_requests >= 0.0 and small_requests <= 1.0)
-        assert(misaligned_requests >= 0.0 and misaligned_requests <= 1.0)
-        assert(random_operations >= 0.0 and random_operations <= 1.0)
-
-        assert(metadata_time_rank >= 0.0)
+        assert(thresholds['metadata_time_rank'][0] >= 0.0)
 
 
 def convert_bytes(bytes_number):
