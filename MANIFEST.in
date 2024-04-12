@@ -1,2 +1,2 @@
 include requirements.txt
-include drishti/snippets/*
+include drishti/includes/snippets/*
