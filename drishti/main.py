@@ -294,7 +294,7 @@ def message(code, target, level, issue, recommendations=None, details=None):
             if ': ' in str(detail['message']):
                 if 'Time taken' in str(detail['message']):
                     messages.append('  {}:left_arrow_curving_right: {}'.format(
-                        '[orange1]',
+                        color,
                         detail['message']
                         )
                     )
