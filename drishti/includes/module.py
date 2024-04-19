@@ -2,6 +2,7 @@
 
 import datetime
 import csv
+import time
 from rich import box
 from rich.syntax import Syntax
 from drishti.includes.config import *
@@ -128,7 +129,7 @@ def check_size_intensive(total_size, total_read_size, total_written_size):
         )
 
 
-def check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, df_posix):
+def check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, df_posix=None):
     '''
     Check whether application has performed an excessive number of small operations
 
@@ -257,6 +258,8 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
         issue = 'Application issues a high number ({}) of small write requests (i.e., < 1MB) which represents {:.2f}% of all write requests'.format(
             total_writes_small, total_writes_small / total_writes * 100.0
         )
+
+        dxt_trigger_time = 0
 
         detail = []
         recommendation = []
