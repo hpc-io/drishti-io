@@ -40,7 +40,7 @@ def check_log_version(console, file, log_version, library_version):
 
             sys.exit(os.EX_DATAERR)
 
-        use_file = file.replace('.darshan', '.converted.darshan')
+        use_file = os.path.abspath(file.replace('.darshan', '.converted.darshan'))
 
         console.print(
             Panel(
