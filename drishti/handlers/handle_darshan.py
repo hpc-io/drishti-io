@@ -40,12 +40,12 @@ def check_log_version(console, file, log_version, library_version):
 
             sys.exit(os.EX_DATAERR)
 
-        use_file = os.path.basename(file.replace('.darshan', '.converted.darshan'))
+        use_file = file.replace('.darshan', '.converted.darshan')
 
         console.print(
             Panel(
                 Padding(
-                    'Converting .darshan log from {} to 3.4.0: format: saving output file "{}" in the current working directory.'.format(
+                    'Converting .darshan log from {}: saving output file "{}" in the current working directory.'.format(
                         log_version,
                         use_file
                     ),
