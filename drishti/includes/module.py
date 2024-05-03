@@ -3,6 +3,7 @@
 import datetime
 import csv
 import time
+import pandas as pd
 from rich import box
 from rich.syntax import Syntax
 from drishti.includes.config import *
@@ -129,7 +130,7 @@ def check_size_intensive(total_size, total_read_size, total_written_size):
         )
 
 
-def check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, df_posix=None):
+def check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
     '''
     Check whether application has performed an excessive number of small operations
 
@@ -154,7 +155,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
 
         detail = []
         recommendation = []
-
+        file_count = 0
         dxt_trigger_time = 0
 
         for index, row in detected_files.iterrows():
@@ -179,17 +180,17 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
                         if not temp_df.empty: 
                             temp_df = temp_df.loc[temp_df['length'] < thresholds['small_requests'][0]]
                             small_read_requests_ranks = temp_df['rank'].unique()
-
-                            if int(small_read_requests_ranks[0]) == 0 and len(small_read_requests_ranks) > 1:
-                                rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[1]))]
-                            else:
-                                rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[0]))]
+                            if len(small_read_requests_ranks) > 0:  
+                                if len(small_read_requests_ranks) > 1 and int(small_read_requests_ranks[0]) == 0:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[1]))]
+                                else:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[0]))]
                             
-                            rank_df = rank_df['read_segments'].iloc[0]
-                            rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
-                            address = dxt_posix.iloc[0]['address_line_mapping']['address']
-                            res = set(list(address)) & set(rank_addresses)
-                            backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
+                                rank_df = rank_df['read_segments'].iloc[0]
+                                rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
+                                address = dxt_posix.iloc[0]['address_line_mapping']['address']
+                                res = set(list(address)) & set(rank_addresses)
+                                backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
                         
                         if len(small_read_requests_ranks) > 0:
                             detail.append(
@@ -263,7 +264,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
 
         detail = []
         recommendation = []
-
+        file_count = 0
         for index, row in detected_files.iterrows():
             if row['total_writes'] > (total_writes * thresholds['small_requests'][0] / 2):
                 detail.append(
@@ -286,19 +287,19 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
                         if not temp_df.empty: 
                             temp_df = temp_df.loc[temp_df['length'] < thresholds['small_requests'][0]]
                             small_write_requests_ranks = temp_df['rank'].unique()   
-
-                            if int(small_write_requests_ranks[0]) == 0 and len(small_write_requests_ranks) > 1:
-                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[1]))]
-                            else:
-                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))] 
+                            if len(small_write_requests_ranks) > 0:
+                                if int(small_write_requests_ranks[0]) == 0 and len(small_write_requests_ranks) > 1:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[1]))]
+                                else:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))] 
+                                
+                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))]
+                                rank_df = rank_df['write_segments'].iloc[0]
+                                rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
+                                address = dxt_posix.iloc[0]['address_line_mapping']['address']
+                                res = set(list(address)) & set(rank_addresses)
+                                backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
                             
-                            rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))]
-                            rank_df = rank_df['write_segments'].iloc[0]
-                            rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
-                            address = dxt_posix.iloc[0]['address_line_mapping']['address']
-                            res = set(list(address)) & set(rank_addresses)
-                            backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
-                        
                         if len(small_write_requests_ranks) > 0:
                             detail.append(
                                 {
@@ -363,7 +364,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
         )
 
 
-def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules):
+def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map=None, df_lustre=None, dxt_posix=None, dxt_posix_read_data=None):
     '''
     Check whether application has excessive misaligned operations
 
@@ -412,7 +413,6 @@ def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_ali
             # DXT Analysis
             if args.backtrace:
                 start = time.time()
-                df_lustre = report.records['LUSTRE'].to_df()
                 
                 if not df_lustre['counters']['LUSTRE_STRIPE_SIZE'].empty:
                     stripe_size = df_lustre['counters']['LUSTRE_STRIPE_SIZE'].iloc[0]
@@ -491,7 +491,7 @@ def check_misaligned(total_operations, total_mem_not_aligned, total_file_not_ali
         )
 
 
-def check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size):
+def check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
     '''
     Check whether application has redundant read or write traffic
 
@@ -516,7 +516,7 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
                 if file_count < thresholds['backtrace'][0]:
                     temp = dxt_posix.loc[dxt_posix['id'] == id]
 
-                    redundant_ranks_ind = -1
+                    random_ranks_ind = -1
                     temp_df = dxt_posix_read_data.loc[dxt_posix_read_data['id'] == id]
                     updated_offsets = (temp_df["offsets"].to_numpy()).tolist()
 
@@ -528,6 +528,7 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
                     if random_ranks_ind != -1:
                         random_rank = temp_df.iloc[redundant_ranks_ind]['rank']
                         random_offsets = temp_df.iloc[redundant_ranks_ind]['offsets']
+                        random_start_time = temp_df.iloc[random_ranks_ind]['start_time']
 
                         temp_random_rank = temp.loc[(temp['rank'] == int(random_rank))]
                         temp_random_rank = temp_random_rank['read_segments'].iloc[0]
@@ -585,7 +586,7 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
                 if file_count < thresholds['backtrace'][0]:
                     temp = dxt_posix.loc[dxt_posix['id'] == id]
 
-                    redundant_ranks_ind = -1
+                    random_ranks_ind = -1
                     temp_df = dxt_posix_write_data.loc[dxt_posix_write_data['id'] == id]
                     updated_offsets = (temp_df["offsets"].to_numpy()).tolist()
                     for i in range(len(updated_offsets)):
@@ -596,6 +597,7 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
                     if random_ranks_ind != -1:
                         random_rank = temp_df.iloc[redundant_ranks_ind]['rank']
                         random_offsets = temp_df.iloc[redundant_ranks_ind]['offsets']
+                        random_start_time = temp_df.iloc[random_ranks_ind]['start_time']
 
                         temp_random_rank = temp.loc[(temp['rank'] == int(random_rank))]
                         temp_random_rank = temp_random_rank['write_segments'].iloc[0]
@@ -643,7 +645,7 @@ def check_traffic(max_read_offset, total_read_size, max_write_offset, total_writ
         )
 
 
-def check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes):
+def check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
     '''
     Check whether application has performed excessive random operations
 
@@ -941,7 +943,7 @@ def check_long_metadata(count_long_metadata, modules):
         )
 
 
-def check_shared_data_imblance(stragglers_count, detected_files, file_map):
+def check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
     '''
     Check how many shared files containing data transfer imbalance
 
@@ -977,9 +979,9 @@ def check_shared_data_imblance(stragglers_count, detected_files, file_map):
             if args.backtrace:
                 start = time.time()
                 if file_count < thresholds['backtrace'][0]:
-                    temp = dxt_posix.loc[dxt_posix['id'] == int(file[0])]
-                    temp_df_1 = dxt_posix_write_data.loc[dxt_posix_write_data['id'] == int(file[0])]
-                    temp_df_2 = dxt_posix_read_data.loc[dxt_posix_read_data['id'] == int(file[0])]
+                    temp = dxt_posix.loc[dxt_posix['id'] == int(row['id'])]
+                    temp_df_1 = dxt_posix_write_data.loc[dxt_posix_write_data['id'] == int(row['id'])]
+                    temp_df_2 = dxt_posix_read_data.loc[dxt_posix_read_data['id'] == int(row['id'])]
 
                     df_merged = pd.concat([temp_df_1, temp_df_2], ignore_index=True, sort=False)
                     df_merged['duration'] = df_merged['end_time'] - df_merged['start_time']
@@ -1156,7 +1158,7 @@ def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, tota
         )
 
 
-def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
+def check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_write_data=None):
     '''
     Check how many write imbalance when accessing individual files
 
@@ -1191,8 +1193,8 @@ def check_individual_write_imbalance(imbalance_count, detected_files, file_map):
             if args.backtrace:
                 start = time.time()
                 if file_count < thresholds['backtrace'][0]:
-                    temp = dxt_posix.loc[dxt_posix['id'] == int(file[0])]
-                    temp_df = dxt_posix_write_data.loc[dxt_posix_write_data['id'] == int(file[0])]
+                    temp = dxt_posix.loc[dxt_posix['id'] == int(row['id'])]
+                    temp_df = dxt_posix_write_data.loc[dxt_posix_write_data['id'] == int(row['id'])]
 
                     maxClm = temp_df['length'].max()
                     temp_df = temp_df.loc[(temp_df['length'] == maxClm)]
@@ -1297,7 +1299,7 @@ def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written)
         )
 
 
-def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
+def check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_read_data=None):
     '''
     Check how many read imbalance when accessing individual files
 
@@ -1332,8 +1334,8 @@ def check_individual_read_imbalance(imbalance_count, detected_files, file_map):
             if args.backtrace:
                 start = time.time()
                 if file_count < thresholds['backtrace'][0]:
-                    temp = dxt_posix.loc[dxt_posix['id'] == int(file[0])]
-                    temp_df = dxt_posix_read_data.loc[dxt_posix_read_data['id'] == int(file[0])]
+                    temp = dxt_posix.loc[dxt_posix['id'] == int(row['id'])]
+                    temp_df = dxt_posix_read_data.loc[dxt_posix_read_data['id'] == int(row['id'])]
 
                     maxClm = temp_df['length'].max()
                     temp_df = temp_df.loc[(temp_df['length'] == maxClm)]
@@ -1440,7 +1442,7 @@ def check_individual_read_imbalance_split(max_bytes_read, min_bytes_read):
 # MPIIO level check
 
 
-def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map):
+def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio=None):
     '''
     Check whether application uses collective mpi read calls
 
@@ -1533,7 +1535,7 @@ def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, tot
         )
 
 
-def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map):
+def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio=None):
     '''
     Check whether application uses collective mpi write calls
 
