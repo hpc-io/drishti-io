@@ -533,7 +533,7 @@ def handler():
 
         column_names = ['id', 'write_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
 
         imbalance_count = 0
 
@@ -549,7 +549,7 @@ def handler():
 
         column_names = ['id', 'read_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data)
 
     #########################################################################################################################################################################
 

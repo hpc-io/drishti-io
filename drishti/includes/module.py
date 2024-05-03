@@ -1158,7 +1158,7 @@ def check_shared_time_imbalance_split(slowest_rank_time, fastest_rank_time, tota
         )
 
 
-def check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
+def check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_write_data=None):
     '''
     Check how many write imbalance when accessing individual files
 
@@ -1299,7 +1299,7 @@ def check_individual_write_imbalance_split(max_bytes_written, min_bytes_written)
         )
 
 
-def check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_read_data=None, dxt_posix_write_data=None):
+def check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix=None, dxt_posix_read_data=None):
     '''
     Check how many read imbalance when accessing individual files
 
@@ -1535,7 +1535,7 @@ def check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, tot
         )
 
 
-def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio):
+def check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio=None):
     '''
     Check whether application uses collective mpi write calls
 
