@@ -155,7 +155,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
 
         detail = []
         recommendation = []
-
+        file_count = 0
         dxt_trigger_time = 0
 
         for index, row in detected_files.iterrows():
@@ -180,17 +180,17 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
                         if not temp_df.empty: 
                             temp_df = temp_df.loc[temp_df['length'] < thresholds['small_requests'][0]]
                             small_read_requests_ranks = temp_df['rank'].unique()
-
-                            if int(small_read_requests_ranks[0]) == 0 and len(small_read_requests_ranks) > 1:
-                                rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[1]))]
-                            else:
-                                rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[0]))]
+                            if len(small_read_requests_ranks) > 0:  
+                                if len(small_read_requests_ranks) > 1 and int(small_read_requests_ranks[0]) == 0:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[1]))]
+                                else:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_read_requests_ranks[0]))]
                             
-                            rank_df = rank_df['read_segments'].iloc[0]
-                            rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
-                            address = dxt_posix.iloc[0]['address_line_mapping']['address']
-                            res = set(list(address)) & set(rank_addresses)
-                            backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
+                                rank_df = rank_df['read_segments'].iloc[0]
+                                rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
+                                address = dxt_posix.iloc[0]['address_line_mapping']['address']
+                                res = set(list(address)) & set(rank_addresses)
+                                backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
                         
                         if len(small_read_requests_ranks) > 0:
                             detail.append(
@@ -264,7 +264,7 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
 
         detail = []
         recommendation = []
-
+        file_count = 0
         for index, row in detected_files.iterrows():
             if row['total_writes'] > (total_writes * thresholds['small_requests'][0] / 2):
                 detail.append(
@@ -287,19 +287,19 @@ def check_small_operation(total_reads, total_reads_small, total_writes, total_wr
                         if not temp_df.empty: 
                             temp_df = temp_df.loc[temp_df['length'] < thresholds['small_requests'][0]]
                             small_write_requests_ranks = temp_df['rank'].unique()   
-
-                            if int(small_write_requests_ranks[0]) == 0 and len(small_write_requests_ranks) > 1:
-                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[1]))]
-                            else:
-                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))] 
+                            if len(small_write_requests_ranks) > 0:
+                                if int(small_write_requests_ranks[0]) == 0 and len(small_write_requests_ranks) > 1:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[1]))]
+                                else:
+                                    rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))] 
+                                
+                                rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))]
+                                rank_df = rank_df['write_segments'].iloc[0]
+                                rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
+                                address = dxt_posix.iloc[0]['address_line_mapping']['address']
+                                res = set(list(address)) & set(rank_addresses)
+                                backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
                             
-                            rank_df = temp.loc[(temp['rank'] == int(small_write_requests_ranks[0]))]
-                            rank_df = rank_df['write_segments'].iloc[0]
-                            rank_addresses = rank_df['stack_memory_addresses'].iloc[0]
-                            address = dxt_posix.iloc[0]['address_line_mapping']['address']
-                            res = set(list(address)) & set(rank_addresses)
-                            backtrace = dxt_posix.iloc[0]['address_line_mapping'].loc[dxt_posix.iloc[0]['address_line_mapping']['address'].isin(res)]
-                        
                         if len(small_write_requests_ranks) > 0:
                             detail.append(
                                 {
