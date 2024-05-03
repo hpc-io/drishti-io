@@ -45,7 +45,7 @@ def check_log_version(console, file, log_version, library_version):
         console.print(
             Panel(
                 Padding(
-                    'Converting .darshan log from {} to 3.4.0: format: saving output file "{}" in the current working directory.'.format(
+                    'Converting .darshan log from {}: format: saving output file "{}" in the current working directory.'.format(
                         log_version,
                         use_file
                     ),
@@ -88,7 +88,8 @@ def handler():
     library_version = darshanll.get_lib_version()
 
     # Make sure log format is of the same version
-    filename = check_log_version(console, args.log_path, log_version, library_version)
+    filename = args.log_path
+    # check_log_version(console, args.log_path, log_version, library_version)
  
     darshanll.log_close(log)
 

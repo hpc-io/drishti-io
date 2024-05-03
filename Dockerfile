@@ -14,22 +14,25 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
     automake
 RUN rm -rf /var/lib/apt/lists/*
 
-RUN wget ftp://ftp.mcs.anl.gov/pub/darshan/releases/darshan-3.4.0.tar.gz
-RUN tar zxvf darshan-3.4.0.tar.gz
+RUN wget https://ftp.mcs.anl.gov/pub/darshan/releases/darshan-3.4.4.tar.gz
+RUN tar zxvf darshan-3.4.4.tar.gz
 
-WORKDIR /darshan-3.4.0/
+WORKDIR /darshan-3.4.4/
 
 RUN bash prepare.sh
 
-WORKDIR /darshan-3.4.0/darshan-util/
+WORKDIR /darshan-3.4.4/darshan-util/
 
-RUN ./configure && make && make install
+RUN ./configure --prefix=/opt/darshan && make && make install
+
+ENV PATH=/opt/darshan/bin:$PATH
+ENV LD_LIBRARY_PATH=/opt/darshan/lib:$LD_LIBRARY_PATH
 
 WORKDIR /
 
-RUN git clone https://github.com/hpc-io/drishti
+RUN git clone https://github.com/hpc-io/drishti-io
 
-WORKDIR /drishti
+WORKDIR /drishti-io
 
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
