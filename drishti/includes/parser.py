@@ -126,7 +126,3 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-
-print(f"DEBUG: log_path: {args.log_path}")
-print(f"DEBUG: export_path: {args.export_dir}")
-print(f"DEBUG: export_csv: {args.export_csv}")
