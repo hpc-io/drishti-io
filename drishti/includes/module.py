@@ -1823,76 +1823,99 @@ def display_footer(console, insights_start_time, insights_end_time):
         )
     )
 
-def export_html(console, filename):
+def export_html(console, export_dir, filename):
     '''
     '''
 
-    if args.export_html:
-        console.save_html(
-            filename,
-            theme=set_export_theme(),
-            clear=False
-        )
+    if not args.export_html:
+        print("DEBUG: export_html() - return")
+        return
+
+    os.makedirs(export_dir, exist_ok=True)
+    filepath = os.path.join(export_dir, f"{filename}.html")
+
+    console.save_html(
+        filepath,
+        theme=set_export_theme(),
+        clear=False
+    )
+
+    print("DEBUG: END export_html()")
 
 
-def export_svg(console, filename):
-    if args.export_svg:
-        console.save_svg(
-            filename,
-            title='Drishti',
-            theme=set_export_theme(),
-            clear=False
-        )
+def export_svg(console, export_dir, filename):
+    if not args.export_svg:
+        return
+    
+    os.makedirs(export_dir, exist_ok=True)
+    filepath = os.path.join(export_dir, f"{filename}.svg")
+
+    console.save_svg(
+        filepath,
+        title='Drishti',
+        theme=set_export_theme(),
+        clear=False
+    )
 
 
-def export_csv(filename, jobid=None):
-    if args.export_csv:
-        issues = [
-            'JOB',
-            INSIGHTS_STDIO_HIGH_USAGE,
-            INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE,
-            INSIGHTS_POSIX_READ_COUNT_INTENSIVE,
-            INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE,
-            INSIGHTS_POSIX_READ_SIZE_INTENSIVE,
-            INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE,
-            INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE,
-            INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE,
-            INSIGHTS_POSIX_REDUNDANT_READ_USAGE,
-            INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE,
-            INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE,
-            INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE,
-            INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE,
-            INSIGHTS_POSIX_HIGH_METADATA_TIME,
-            INSIGHTS_POSIX_SIZE_IMBALANCE,
-            INSIGHTS_POSIX_TIME_IMBALANCE,
-            INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE,
-            INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE,
-            INSIGHTS_MPI_IO_NO_USAGE,
-            INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE,
-            INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE,
-            INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE,
-            INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
-            INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
-            INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
-            INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
-            INSIGHTS_MPI_IO_AGGREGATORS_INTER,
-            INSIGHTS_MPI_IO_AGGREGATORS_OK
-        ]
-        if codes:
-            issues.extend(codes)
+def export_csv(export_dir, filename, jobid=None):
+    if not args.export_csv:
+        return
+    
+    issues = [
+        'JOB',
+        INSIGHTS_STDIO_HIGH_USAGE,
+        INSIGHTS_POSIX_WRITE_COUNT_INTENSIVE,
+        INSIGHTS_POSIX_READ_COUNT_INTENSIVE,
+        INSIGHTS_POSIX_WRITE_SIZE_INTENSIVE,
+        INSIGHTS_POSIX_READ_SIZE_INTENSIVE,
+        INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_USAGE,
+        INSIGHTS_POSIX_HIGH_MISALIGNED_MEMORY_USAGE,
+        INSIGHTS_POSIX_HIGH_MISALIGNED_FILE_USAGE,
+        INSIGHTS_POSIX_REDUNDANT_READ_USAGE,
+        INSIGHTS_POSIX_REDUNDANT_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_RANDOM_READ_USAGE,
+        INSIGHTS_POSIX_HIGH_SEQUENTIAL_READ_USAGE,
+        INSIGHTS_POSIX_HIGH_RANDOM_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_SEQUENTIAL_WRITE_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_READ_REQUESTS_SHARED_FILE_USAGE,
+        INSIGHTS_POSIX_HIGH_SMALL_WRITE_REQUESTS_SHARED_FILE_USAGE,
+        INSIGHTS_POSIX_HIGH_METADATA_TIME,
+        INSIGHTS_POSIX_SIZE_IMBALANCE,
+        INSIGHTS_POSIX_TIME_IMBALANCE,
+        INSIGHTS_POSIX_INDIVIDUAL_WRITE_SIZE_IMBALANCE,
+        INSIGHTS_POSIX_INDIVIDUAL_READ_SIZE_IMBALANCE,
+        INSIGHTS_MPI_IO_NO_USAGE,
+        INSIGHTS_MPI_IO_NO_COLLECTIVE_READ_USAGE,
+        INSIGHTS_MPI_IO_NO_COLLECTIVE_WRITE_USAGE,
+        INSIGHTS_MPI_IO_COLLECTIVE_READ_USAGE,
+        INSIGHTS_MPI_IO_COLLECTIVE_WRITE_USAGE,
+        INSIGHTS_MPI_IO_BLOCKING_READ_USAGE,
+        INSIGHTS_MPI_IO_BLOCKING_WRITE_USAGE,
+        INSIGHTS_MPI_IO_AGGREGATORS_INTRA,
+        INSIGHTS_MPI_IO_AGGREGATORS_INTER,
+        INSIGHTS_MPI_IO_AGGREGATORS_OK
+    ]
+    if codes:
+        issues.extend(codes)
 
-        detected_issues = dict.fromkeys(issues, False)
-        detected_issues['JOB'] = jobid
+    detected_issues = dict.fromkeys(issues, False)
+    detected_issues['JOB'] = jobid
 
-        for report in csv_report:
-            detected_issues[report] = True
+    for report in csv_report:
+        detected_issues[report] = True
 
-        with open(filename, 'w') as f:
-            w = csv.writer(f)
-            w.writerow(detected_issues.keys())
-            w.writerow(detected_issues.values())
+    # ensure dir exists
+    os.makedirs(export_dir, exist_ok=True)
+    filepath = os.path.join(export_dir, f"{filename}.csv")
+
+    print(f"DEBUG: export_dir: {export_dir}")
+    print(f"DEBUG: filename: {filename}")
+    print(f"DEBUG: filepath: {filepath}")
+
+    with open(filepath, 'w') as f:
+        w = csv.writer(f)
+        w.writerow(detected_issues.keys())
+        w.writerow(detected_issues.values())
 
