@@ -97,6 +97,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--export_dir',
+    default="",
+    dest='export_dir',
+    help='Specify the directory prefix for the output files (if any)'
+)
+
+parser.add_argument(
     '--json', 
     default=False, 
     dest='json',
@@ -119,3 +126,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+print(f"DEBUG: log_path: {args.log_path}")
+print(f"DEBUG: export_path: {args.export_dir}")
+print(f"DEBUG: export_csv: {args.export_csv}")
