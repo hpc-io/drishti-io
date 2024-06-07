@@ -752,12 +752,10 @@ def handler():
     display_thresholds(console)
     display_footer(console, insights_start_time, insights_end_time)
 
+    # Export to HTML, SVG, and CSV
     input_filename = os.path.basename(args.log_path).replace('.darshan', '')
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
-    print(f"DEBUG: outfile_name: {input_filename}")
-
     export_html(console, out_dir, input_filename)
     export_svg(console, out_dir, input_filename)
-
     export_csv(out_dir, input_filename, job['job']['jobid'])

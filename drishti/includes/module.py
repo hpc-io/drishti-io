@@ -1823,15 +1823,12 @@ def display_footer(console, insights_start_time, insights_end_time):
         )
     )
 
-def export_html(console, export_dir, filename):
-    '''
-    '''
 
+def export_html(console, export_dir, filename):
     if not args.export_html:
-        print("DEBUG: export_html() - return")
         return
 
-    os.makedirs(export_dir, exist_ok=True)
+    os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
     filepath = os.path.join(export_dir, f"{filename}.html")
 
     console.save_html(
@@ -1840,14 +1837,12 @@ def export_html(console, export_dir, filename):
         clear=False
     )
 
-    print("DEBUG: END export_html()")
-
 
 def export_svg(console, export_dir, filename):
     if not args.export_svg:
         return
     
-    os.makedirs(export_dir, exist_ok=True)
+    os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
     filepath = os.path.join(export_dir, f"{filename}.svg")
 
     console.save_svg(
@@ -1906,13 +1901,9 @@ def export_csv(export_dir, filename, jobid=None):
     for report in csv_report:
         detected_issues[report] = True
 
-    # ensure dir exists
-    os.makedirs(export_dir, exist_ok=True)
+    
+    os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
     filepath = os.path.join(export_dir, f"{filename}.csv")
-
-    print(f"DEBUG: export_dir: {export_dir}")
-    print(f"DEBUG: filename: {filename}")
-    print(f"DEBUG: filepath: {filepath}")
 
     with open(filepath, 'w') as f:
         w = csv.writer(f)
