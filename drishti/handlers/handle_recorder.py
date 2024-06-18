@@ -579,30 +579,9 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
     display_thresholds(console)
     display_footer(console, insights_start_time, insights_end_time)
 
-    # if args.split_files:
-    #     filename = '{}.{}.html'.format(args.log_path, fid)
-    # else:
-    #     filename = '{}.html'.format(args.log_path)
-
-    # export_html(console, filename)
-
-    # if args.split_files:
-    #     filename = '{}.{}.svg'.format(args.log_path, fid)
-    # else:
-    #     filename = '{}.svg'.format(args.log_path)
-
-    # export_svg(console, filename)
-
-    # if args.split_files:
-    #     filename = '{}.{}.summary.csv'.format(args.log_path, fid)
-    # else:
-    #     filename = '{}-summary.csv'.format(args.log_path)
-    # export_csv(filename)
-
     # Export to HTML, SVG, and CSV
     input_filename = os.path.basename(os.path.dirname(args.log_path))
     input_filename = f"{input_filename}.{fid}" if args.split_files else input_filename # Append fid if split_files is enabled
-
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
     export_html(console, out_dir, input_filename)
