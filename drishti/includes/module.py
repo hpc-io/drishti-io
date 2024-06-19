@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 
-import csv
 import datetime
+import csv
 import time
-
 import pandas as pd
 from rich import box
 from rich.syntax import Syntax
-
-from rich.syntax import Syntax
-
 from drishti.includes.config import *
 
 '''
@@ -1907,7 +1903,7 @@ def export_csv(export_dir, filename, jobid=None):
 
     
     os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
-    filepath = os.path.join(export_dir, f"{filename}-summary.csv")
+    filepath = os.path.join(export_dir, f"{filename}.csv")
 
     with open(filepath, 'w') as f:
         w = csv.writer(f)
