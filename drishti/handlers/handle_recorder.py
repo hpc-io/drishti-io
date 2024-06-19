@@ -586,4 +586,4 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
 
     export_html(console, out_dir, input_filename)
     export_svg(console, out_dir, input_filename)
-    export_csv(out_dir, input_filename, job['job']['jobid'])
+    export_csv(out_dir, input_filename)
