@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 with open("README.md", "r") as f:
     long_description = f.read()
@@ -19,7 +19,7 @@ setup(
     install_requires=[
         'argparse',
         'pandas',
-        'darshan==3.4.4.0',
+        'darshan>=3.4.4.0',
         'rich==12.5.1',
         'recorder-utils',
     ],
