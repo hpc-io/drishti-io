@@ -581,7 +581,8 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
 
     # Export to HTML, SVG, and CSV
     input_filename = os.path.basename(os.path.dirname(args.log_path))
-    input_filename = f"{input_filename}.{fid}" if args.split_files else input_filename # Append fid if split_files is enabled
+    if args.split_files:
+        input_filename = f"{input_filename}.{fid}"
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
     export_html(console, out_dir, input_filename)
