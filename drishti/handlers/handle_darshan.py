@@ -753,9 +753,9 @@ def handler():
     display_footer(console, insights_start_time, insights_end_time)
 
     # Export to HTML, SVG, and CSV
-    input_filename = os.path.basename(args.log_path).replace('.darshan', '')
+    trace_name = os.path.basename(args.log_path).replace('.darshan', '')
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
-    export_html(console, out_dir, input_filename)
-    export_svg(console, out_dir, input_filename)
-    export_csv(out_dir, input_filename, job['job']['jobid'])
+    export_html(console, out_dir, trace_name)
+    export_svg(console, out_dir, trace_name)
+    export_csv(out_dir, trace_name, job['job']['jobid'])
