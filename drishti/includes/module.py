@@ -1824,12 +1824,12 @@ def display_footer(console, insights_start_time, insights_end_time):
     )
 
 
-def export_html(console, export_dir, filename):
+def export_html(console, export_dir, trace_name):
     if not args.export_html:
         return
 
     os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
-    filepath = os.path.join(export_dir, f"{filename}.html")
+    filepath = os.path.join(export_dir, f"{trace_name}.html")
 
     console.save_html(
         filepath,
@@ -1838,12 +1838,12 @@ def export_html(console, export_dir, filename):
     )
 
 
-def export_svg(console, export_dir, filename):
+def export_svg(console, export_dir, trace_name):
     if not args.export_svg:
         return
     
     os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
-    filepath = os.path.join(export_dir, f"{filename}.svg")
+    filepath = os.path.join(export_dir, f"{trace_name}.svg")
 
     console.save_svg(
         filepath,
@@ -1853,7 +1853,7 @@ def export_svg(console, export_dir, filename):
     )
 
 
-def export_csv(export_dir, filename, jobid=None):
+def export_csv(export_dir, trace_name, jobid=None):
     if not args.export_csv:
         return
     
@@ -1903,7 +1903,7 @@ def export_csv(export_dir, filename, jobid=None):
 
     
     os.makedirs(export_dir, exist_ok=True) # Ensure export directory exists
-    filepath = os.path.join(export_dir, f"{filename}.csv")
+    filepath = os.path.join(export_dir, f"{trace_name}.csv")
 
     with open(filepath, 'w') as f:
         w = csv.writer(f)

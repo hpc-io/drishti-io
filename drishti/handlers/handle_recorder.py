@@ -580,11 +580,11 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
     display_footer(console, insights_start_time, insights_end_time)
 
     # Export to HTML, SVG, and CSV
-    input_filename = os.path.basename(os.path.dirname(args.log_path))
+    trace_name = os.path.basename(os.path.dirname(args.log_path))
     if args.split_files:
-        input_filename = f"{input_filename}.{fid}"
+        trace_name = f"{trace_name}.{fid}"
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
-    export_html(console, out_dir, input_filename)
-    export_svg(console, out_dir, input_filename)
-    export_csv(out_dir, input_filename)
+    export_html(console, out_dir, trace_name)
+    export_svg(console, out_dir, trace_name)
+    export_csv(out_dir, trace_name)
