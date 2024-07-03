@@ -5,7 +5,6 @@ import sys
 from subprocess import call
 from drishti.includes.parser import *
 
-
 '''
                          |- handler_darshan   -|
                          |                     |
@@ -16,7 +15,6 @@ reporter -> /handlers -> |- handler_recorder  -|   -|
     |
     |-----> /includes -> module -> config -> parser
 '''
-
 
 LOG_TYPE_DARSHAN = 0
 LOG_TYPE_RECORDER = 1
@@ -34,22 +32,27 @@ def check_log_type(path):
         if not os.path.isfile(path):
             print('Unable to open .darshan file.')
             sys.exit(os.EX_NOINPUT)
-        else: return LOG_TYPE_DARSHAN
-    else: # check whether is a valid recorder log
+        else:
+            return LOG_TYPE_DARSHAN
+    else:  # check whether is a valid recorder log
         if not os.path.isdir(path):
             print('Unable to open recorder folder.')
             sys.exit(os.EX_NOINPUT)
-        else: return LOG_TYPE_RECORDER
+        else:
+            return LOG_TYPE_RECORDER
 
 
 def main():
     log_type = check_log_type(args.log_path)
-    
+
     if log_type == LOG_TYPE_DARSHAN:
         from drishti.handlers.handle_darshan import handler
 
     elif log_type == LOG_TYPE_RECORDER:
         from drishti.handlers.handle_recorder import handler
-    
+
     handler()
 
+
+if __name__ == '__main__':
+    main()
