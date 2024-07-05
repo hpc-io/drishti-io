@@ -5,7 +5,8 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    'log_path',
+    'log_paths',
+    nargs='+',
     help='Input .darshan file or recorder folder'
 )
 
