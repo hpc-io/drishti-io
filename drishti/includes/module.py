@@ -6,7 +6,7 @@ import time
 import pandas as pd
 from rich import box
 from rich.syntax import Syntax
-from drishti.includes.config import *
+from includes.config import *
 
 '''
 Before calling the functions below

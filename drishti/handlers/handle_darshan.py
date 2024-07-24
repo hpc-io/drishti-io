@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
-
+import collections
+import dataclasses
+from dataclasses import dataclass
+import datetime
 import io
 import sys
 import time
 import shlex
 import shutil
 import subprocess
+import typing
+
 import pandas as pd
 import darshan
 import darshan.backend.cffi_backend as darshanll
 
 from rich import print
 from packaging import version
-from drishti.includes.module import *
+from includes.module import *
+import includes.module as module
+from includes.parser import args
+
+from pprint import pprint
 
 
 def is_available(name):
@@ -70,38 +79,321 @@ def check_log_version(console, file, log_version, library_version):
     return use_file
 
 
-def handler():
-    console = init_console()
+@dataclass
+class TimestampPair:
+    start: datetime.date
+    end: datetime.date
 
-    insights_start_time = time.time()
 
+@dataclass
+class DarshanTrace:
+    # Trace metadata
+    path: str
+    jobid: str
+    log_ver: str
+    time: TimestampPair
+    exe: str
+
+    # Report
+    report: darshan.DarshanReport
+    modules: typing.Iterable[str]
+
+    stdio_df: pd.DataFrame = None
+    posix_df: pd.DataFrame = None
+    mpiio_df: pd.DataFrame = None
+    lustre_df: pd.DataFrame = None
+
+    dxt_posix: pd.DataFrame = None
+    dxt_mpiio: pd.DataFrame = None
+
+    dxt_posix_read_data: pd.DataFrame = None
+    dxt_posix_write_data: pd.DataFrame = None
+
+    total_write_size_stdio: int
+    total_write_size_stdio: int
+    total_size_stdio: int
+
+    total_write_size_posix: int
+    total_read_size_posix: int
+    total_size_posix: int
+
+    total_write_size_mpiio: int
+    total_read_size_mpiio: int
+    total_size_mpiio: int
+
+    total_size: int
+    total_files: int
+
+    total_files_stdio: int = 0
+    total_files_posix: int = 0
+    total_files_mpiio: int = 0
+
+    files: dict[str, dict[str, int]] = dataclasses.field(default_factory=dict)
+
+    total_reads: int = 0
+    total_writes: int = 0
+    total_operations: int = 0
+    total_read_size: int = 0
+    total_written_size: int = 0
+    total_size: int = 0
+    total_reads_small: int = 0
+    total_writes_small: int = 0
+
+    def __init__(self, trace_path: str, job_information, report: darshan.DarshanReport):
+        self.path = trace_path
+
+        self.jobid = job_information['jobid']
+        self.log_ver = job_information['log_ver'] if 'log_ver' in job_information else job_information['metadata'][
+            'lib_ver']
+        self.exe = report.metadata['exe']
+
+        _start_time = datetime.datetime.fromtimestamp(job_information['start_time_sec'], tz=datetime.timezone.utc)
+        _end_time = datetime.datetime.fromtimestamp(job_information['end_time_sec'], tz=datetime.timezone.utc)
+        self.time = TimestampPair(_start_time, _end_time)
+
+        self.modules = report.modules.keys()
+
+        # TODO: Should I search in self.modules or in report.records?
+        # ! All dfs are being materialised
+        self.report = report
+        self.posix_df = report.records['POSIX'].to_df() if 'POSIX' in self.modules else None
+        self.stdio_df = report.records['STDIO'].to_df() if 'STDIO' in self.modules else None
+        self.mpiio_df = report.records['MPI-IO'].to_df() if 'MPI-IO' in self.modules else None
+
+        self.lustre_df = report.records['LUSTRE'].to_df() if 'LUSTRE' in self.modules else None
+
+        self.dxt_posix = report.records['DXT_POSIX'].to_df() if 'DXT_POSIX' in self.modules else None
+        self.dxt_mpiio = report.records['DXT_MPIIO'].to_df() if 'DXT_MPIIO' in self.modules else None
+
+    def generate_dxt_posix_rw_df(self) -> None:
+        if not args.backtrace:
+            return
+        if not self.dxt_posix:
+            return
+        if "address_line_mapping" not in self.dxt_posix:
+            args.backtrace = False
+            return
+
+        read_id = []
+        read_rank = []
+        read_length = []
+        read_offsets = []
+        read_end_time = []
+        read_start_time = []
+        read_operation = []
+
+        write_id = []
+        write_rank = []
+        write_length = []
+        write_offsets = []
+        write_end_time = []
+        write_start_time = []
+        write_operation = []
+
+        for r in zip(self.dxt_posix['rank'], self.dxt_posix['read_segments'], self.dxt_posix['write_segments'],
+                     self.dxt_posix['id']):
+            if not r[1].empty:
+                read_id.append([r[3]] * len((r[1]["length"].to_list())))
+                read_rank.append([r[0]] * len((r[1]["length"].to_list())))
+                read_length.append(r[1]["length"].to_list())
+                read_end_time.append(r[1]["end_time"].to_list())
+                read_start_time.append(r[1]["start_time"].to_list())
+                read_operation.append(["read"] * len((r[1]["length"].to_list())))
+                read_offsets.append(r[1]["offset"].to_list())
+
+            if not r[2].empty:
+                write_id.append([r[3]] * len((r[2]['length'].to_list())))
+                write_rank.append([r[0]] * len((r[2]['length'].to_list())))
+                write_length.append(r[2]['length'].to_list())
+                write_end_time.append(r[2]['end_time'].to_list())
+                write_start_time.append(r[2]['start_time'].to_list())
+                write_operation.append(['write'] * len((r[2]['length'].to_list())))
+                write_offsets.append(r[2]['offset'].to_list())
+
+        read_id = [element for nestedlist in read_id for element in nestedlist]
+        read_rank = [element for nestedlist in read_rank for element in nestedlist]
+        read_length = [element for nestedlist in read_length for element in nestedlist]
+        read_offsets = [element for nestedlist in read_offsets for element in nestedlist]
+        read_end_time = [element for nestedlist in read_end_time for element in nestedlist]
+        read_operation = [element for nestedlist in read_operation for element in nestedlist]
+        read_start_time = [element for nestedlist in read_start_time for element in nestedlist]
+
+        write_id = [element for nestedlist in write_id for element in nestedlist]
+        write_rank = [element for nestedlist in write_rank for element in nestedlist]
+        write_length = [element for nestedlist in write_length for element in nestedlist]
+        write_offsets = [element for nestedlist in write_offsets for element in nestedlist]
+        write_end_time = [element for nestedlist in write_end_time for element in nestedlist]
+        write_operation = [element for nestedlist in write_operation for element in nestedlist]
+        write_start_time = [element for nestedlist in write_start_time for element in nestedlist]
+
+        self.dxt_posix_read_data = pd.DataFrame(
+            {
+                "id": read_id,
+                "rank": read_rank,
+                "length": read_length,
+                "end_time": read_end_time,
+                "start_time": read_start_time,
+                "operation": read_operation,
+                "offsets": read_offsets,
+            }
+        )
+
+        self.dxt_posix_write_data = pd.DataFrame(
+            {
+                "id": write_id,
+                "rank": write_rank,
+                "length": write_length,
+                "end_time": write_end_time,
+                "start_time": write_start_time,
+                "operation": write_operation,
+                "offsets": write_offsets,
+            }
+        )
+
+    def calculate_insights(self) -> None:
+        self.total_write_size_stdio = self.stdio_df['counters']['STDIO_BYTES_WRITTEN'].sum() if self.stdio_df else 0
+        self.total_read_size_stdio = self.stdio_df['counters']['STDIO_BYTES_READ'].sum() if self.stdio_df else 0
+        self.total_size_stdio = self.total_write_size_stdio + self.total_read_size_stdio
+
+        self.total_write_size_posix = self.posix_df['counters']['POSIX_BYTES_WRITTEN'].sum() if self.posix_df else 0
+        self.total_read_size_posix = self.posix_df['counters']['POSIX_BYTES_READ'].sum() if self.posix_df else 0
+        self.total_size_posix = self.total_write_size_posix + self.total_read_size_posix
+
+        self.total_write_size_mpiio = self.mpiio_df['counters']['MPIIO_BYTES_WRITTEN'].sum() if self.mpiio_df else 0
+        self.total_read_size_mpiio = self.mpiio_df['counters']['MPIIO_BYTES_READ'].sum() if self.mpiio_df else 0
+        self.total_size_mpiio = self.total_write_size_mpiio + self.total_read_size_mpiio
+
+        # POSIX will capture POSIX-only and MPI-IO
+        if self.total_size_posix > 0 and self.total_size_posix >= self.total_size_mpiio:
+            self.total_size_posix -= self.total_size_mpiio
+
+        self.total_size = self.total_size_stdio + self.total_size_posix + self.total_size_mpiio
+
+        assert (self.total_size_stdio >= 0)
+        assert (self.total_size_posix >= 0)
+        assert (self.total_size_mpiio >= 0)
+
+    def files_stuff(self) -> None:
+        file_map = self.report.name_records
+
+        self.total_files = len(file_map)
+
+        # files = dict()
+
+        for id, path in file_map.items():
+            uses_stdio = len(
+                self.stdio_df['counters'][self.stdio_df['counters']['id'] == id]) > 0 if self.stdio_df else 0
+            uses_posix = len(
+                self.posix_df['counters'][self.posix_df['counters']['id'] == id]) > 0 if self.posix_df else 0
+            uses_mpiio = len(
+                self.mpiio_df['counters'][self.mpiio_df['counters']['id'] == id]) > 0 if self.mpiio_df else 0
+
+            self.total_files_stdio += uses_stdio
+            self.total_files_posix += uses_posix
+            self.total_files_mpiio += uses_mpiio
+
+            self.files[id] = {
+                'path': path,
+                'stdio': uses_stdio,
+                'posix': uses_posix,
+                'mpiio': uses_mpiio
+            }
+
+    def check_stdio(self) -> None:
+        module.check_stdio(self.total_size, self.total_size_stdio)
+
+    def check_mpiio(self) -> None:
+        module.check_mpiio(self.modules)
+
+    def something(self) -> None:
+        if not self.posix_df:
+            return
+
+        self.total_reads = self.posix_df['counters']['POSIX_READS'].sum()
+        self.total_writes = self.posix_df['counters']['POSIX_WRITES'].sum()
+        self.total_operations = self.total_writes + self.total_reads
+
+        module.check_operation_intensive(self.total_operations, self.total_reads, self.total_writes)
+
+        self.total_read_size = self.posix_df['counters']['POSIX_BYTES_READ'].sum()
+        self.total_written_size = self.posix_df['counters']['POSIX_BYTES_WRITTEN'].sum()
+        self.total_size = self.total_written_size + self.total_read_size
+
+        module.check_size_intensive(self.total_size, self.total_read_size, self.total_written_size)
+
+        self.total_reads_small = (
+                self.posix_df['counters']['POSIX_SIZE_READ_0_100'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_READ_100_1K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_READ_1K_10K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_READ_10K_100K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
+        )
+        self.total_writes_small = (
+                self.posix_df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
+                self.posix_df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
+        )
+
+    def something2(self):
+        detected_files = pd.DataFrame(self.posix_df['counters'].groupby('id')[['INSIGHTS_POSIX_SMALL_READ',
+                                                                    'INSIGHTS_POSIX_SMALL_WRITE']].sum()).reset_index()
+        detected_files.columns = ['id', 'total_reads', 'total_writes']
+        detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
+
+        file_map = self.report.name_records
+        module.check_small_operation(self.total_reads, self.total_reads_small, self.total_writes, self.total_writes_small,
+                                     detected_files,
+                                     self.modules, file_map, self.dxt_posix, self.dxt_posix_read_data,
+                                     self.dxt_posix_write_data)
+
+
+def file_reader(trace_path: str):
     log = darshanll.log_open(args.log_path)
 
     modules = darshanll.log_get_modules(log)
 
     information = darshanll.log_get_job(log)
 
-    if 'log_ver' in information:
-        log_version = information['log_ver']
-    else:
-        log_version = information['metadata']['lib_ver']  
-    library_version = darshanll.get_lib_version()
 
-    # Make sure log format is of the same version
-    filename = args.log_path
-    # check_log_version(console, args.log_path, log_version, library_version)
- 
-    darshanll.log_close(log)
+def log_relation_check():
+    # TODO: Ensure that all logs are from a single job, generated at the same time, from the same executable and using the same library version
+    pass
+
+
+def handler():
+    console = init_console()
+
+    insights_start_time = time.time()
+
+    # TODO: Break here for new fn
+
+    trace_path = args.log_paths[0]  # TODO: A single file rn
 
     darshan.enable_experimental()
+    library_version = darshanll.get_lib_version()
 
-    report = darshan.DarshanReport(filename)
+    # TODO: Can this be put in a with block?
+    log = darshanll.log_open(trace_path)
+    information = darshanll.log_get_job(log)
+    darshanll.log_close(log)
 
-    job = report.metadata
+    report = darshan.DarshanReport(trace_path)
+    current_trace = DarshanTrace(trace_path, information, report)  # WIP: Implement this constructor
+    #
+
+    # TODO: What to do here?
+    # # Make sure log format is of the same version
+    # filename = args.log_path
+    # # check_log_version(console, args.log_path, log_version, library_version)
+    #
+
+    # TODO: Break here
 
     #########################################################################################################################################################################
 
-    # Check usage of STDIO, POSIX, and MPI-IO per file
+    # TODO: Check usage of STDIO, POSIX, and MPI-IO per file
 
     if 'STDIO' in report.records:
         df_stdio = report.records['STDIO'].to_df()
@@ -110,7 +402,7 @@ def handler():
             total_write_size_stdio = df_stdio['counters']['STDIO_BYTES_WRITTEN'].sum()
             total_read_size_stdio = df_stdio['counters']['STDIO_BYTES_READ'].sum()
 
-            total_size_stdio = total_write_size_stdio + total_read_size_stdio 
+            total_size_stdio = total_write_size_stdio + total_read_size_stdio
         else:
             total_size_stdio = 0
     else:
@@ -140,107 +432,18 @@ def handler():
             total_write_size_mpiio = df_mpiio['counters']['MPIIO_BYTES_WRITTEN'].sum()
             total_read_size_mpiio = df_mpiio['counters']['MPIIO_BYTES_READ'].sum()
 
-            total_size_mpiio = total_write_size_mpiio + total_read_size_mpiio 
+            total_size_mpiio = total_write_size_mpiio + total_read_size_mpiio
         else:
             total_size_mpiio = 0
     else:
         df_mpiio = None
 
         total_size_mpiio = 0
-    
+
     dxt_posix = None
     dxt_posix_read_data = None
     dxt_posix_write_data = None
     dxt_mpiio = None
-
-    df_lustre = None
-    if "LUSTRE" in report.records:
-        df_lustre = report.records['LUSTRE'].to_df()
-    
-    if args.backtrace:
-        if "DXT_POSIX" in report.records:
-            dxt_posix = report.records["DXT_POSIX"].to_df()
-            dxt_posix = pd.DataFrame(dxt_posix)
-            if "address_line_mapping" not in dxt_posix:
-                args.backtrace = False
-            else:
-                read_id = []
-                read_rank = []
-                read_length = []
-                read_offsets = []
-                read_end_time = []
-                read_start_time = []
-                read_operation = []
-
-                write_id = []
-                write_rank = []
-                write_length = []
-                write_offsets = []
-                write_end_time = []
-                write_start_time = []
-                write_operation = []
-                
-                for r in zip(dxt_posix['rank'], dxt_posix['read_segments'], dxt_posix['write_segments'], dxt_posix['id']):
-                    if not r[1].empty:
-                        read_id.append([r[3]] * len((r[1]['length'].to_list())))
-                        read_rank.append([r[0]] * len((r[1]['length'].to_list())))
-                        read_length.append(r[1]['length'].to_list())
-                        read_end_time.append(r[1]['end_time'].to_list())
-                        read_start_time.append(r[1]['start_time'].to_list())
-                        read_operation.append(['read'] * len((r[1]['length'].to_list())))
-                        read_offsets.append(r[1]['offset'].to_list())
-
-                    if not r[2].empty:
-                        write_id.append([r[3]] * len((r[2]['length'].to_list())))     
-                        write_rank.append([r[0]] * len((r[2]['length'].to_list())))
-                        write_length.append(r[2]['length'].to_list())
-                        write_end_time.append(r[2]['end_time'].to_list())
-                        write_start_time.append(r[2]['start_time'].to_list())
-                        write_operation.append(['write'] * len((r[2]['length'].to_list())))
-                        write_offsets.append(r[2]['offset'].to_list())
-
-                read_id = [element for nestedlist in read_id for element in nestedlist]
-                read_rank = [element for nestedlist in read_rank for element in nestedlist]
-                read_length = [element for nestedlist in read_length for element in nestedlist]
-                read_offsets = [element for nestedlist in read_offsets for element in nestedlist]
-                read_end_time = [element for nestedlist in read_end_time for element in nestedlist]
-                read_operation = [element for nestedlist in read_operation for element in nestedlist]
-                read_start_time = [element for nestedlist in read_start_time for element in nestedlist]
-                
-                write_id = [element for nestedlist in write_id for element in nestedlist]
-                write_rank = [element for nestedlist in write_rank for element in nestedlist]
-                write_length = [element for nestedlist in write_length for element in nestedlist]
-                write_offsets = [element for nestedlist in write_offsets for element in nestedlist]
-                write_end_time = [element for nestedlist in write_end_time for element in nestedlist]
-                write_operation = [element for nestedlist in write_operation for element in nestedlist]
-                write_start_time = [element for nestedlist in write_start_time for element in nestedlist]
-
-                dxt_posix_read_data = pd.DataFrame(
-                    {
-                    'id': read_id,
-                    'rank': read_rank,
-                    'length': read_length,
-                    'end_time': read_end_time,
-                    'start_time': read_start_time,
-                    'operation': read_operation,
-                    'offsets': read_offsets,
-                    })
-
-                dxt_posix_write_data = pd.DataFrame(
-                    {
-                    'id': write_id,
-                    'rank': write_rank,
-                    'length': write_length,
-                    'end_time': write_end_time,
-                    'start_time': write_start_time,
-                    'operation': write_operation,
-                    'offsets': write_offsets,
-                    })
-
-            if "DXT_MPIIO" in report.records:
-                dxt_mpiio = report.records["DXT_MPIIO"].to_df()
-                dxt_mpiio = pd.DataFrame(dxt_mpiio)
-            
 
     # Since POSIX will capture both POSIX-only accesses and those comming from MPI-IO, we can subtract those
     if total_size_posix > 0 and total_size_posix >= total_size_mpiio:
@@ -248,9 +451,9 @@ def handler():
 
     total_size = total_size_stdio + total_size_posix + total_size_mpiio
 
-    assert(total_size_stdio >= 0)
-    assert(total_size_posix >= 0)
-    assert(total_size_mpiio >= 0)
+    assert (total_size_stdio >= 0)
+    assert (total_size_posix >= 0)
+    assert (total_size_mpiio >= 0)
 
     files = {}
 
@@ -268,7 +471,7 @@ def handler():
             uses_stdio = len(df_stdio['counters'][(df_stdio['counters']['id'] == id)]) > 0
         else:
             uses_stdio = 0
-        
+
         if df_posix:
             uses_posix = len(df_posix['counters'][(df_posix['counters']['id'] == id)]) > 0
         else:
@@ -305,7 +508,7 @@ def handler():
         total_writes = df['counters']['POSIX_WRITES'].sum()
 
         # Get total number of I/O operations
-        total_operations = total_writes + total_reads 
+        total_operations = total_writes + total_reads
 
         # To check whether the application is write-intersive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
         check_operation_intensive(total_operations, total_reads, total_writes)
@@ -321,45 +524,47 @@ def handler():
 
         # Get the number of small I/O operations (less than 1 MB)
         total_reads_small = (
-            df['counters']['POSIX_SIZE_READ_0_100'].sum() +
-            df['counters']['POSIX_SIZE_READ_100_1K'].sum() +
-            df['counters']['POSIX_SIZE_READ_1K_10K'].sum() +
-            df['counters']['POSIX_SIZE_READ_10K_100K'].sum() +
-            df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
+                df['counters']['POSIX_SIZE_READ_0_100'].sum() +
+                df['counters']['POSIX_SIZE_READ_100_1K'].sum() +
+                df['counters']['POSIX_SIZE_READ_1K_10K'].sum() +
+                df['counters']['POSIX_SIZE_READ_10K_100K'].sum() +
+                df['counters']['POSIX_SIZE_READ_100K_1M'].sum()
         )
 
         total_writes_small = (
-            df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
-            df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
+                df['counters']['POSIX_SIZE_WRITE_0_100'].sum() +
+                df['counters']['POSIX_SIZE_WRITE_100_1K'].sum() +
+                df['counters']['POSIX_SIZE_WRITE_1K_10K'].sum() +
+                df['counters']['POSIX_SIZE_WRITE_10K_100K'].sum() +
+                df['counters']['POSIX_SIZE_WRITE_100K_1M'].sum()
         )
 
         # Get the files responsible for more than half of these accesses
         files = []
 
         df['counters']['INSIGHTS_POSIX_SMALL_READ'] = (
-            df['counters']['POSIX_SIZE_READ_0_100'] +
-            df['counters']['POSIX_SIZE_READ_100_1K'] +
-            df['counters']['POSIX_SIZE_READ_1K_10K'] +
-            df['counters']['POSIX_SIZE_READ_10K_100K'] +
-            df['counters']['POSIX_SIZE_READ_100K_1M']
+                df['counters']['POSIX_SIZE_READ_0_100'] +
+                df['counters']['POSIX_SIZE_READ_100_1K'] +
+                df['counters']['POSIX_SIZE_READ_1K_10K'] +
+                df['counters']['POSIX_SIZE_READ_10K_100K'] +
+                df['counters']['POSIX_SIZE_READ_100K_1M']
         )
 
         df['counters']['INSIGHTS_POSIX_SMALL_WRITE'] = (
-            df['counters']['POSIX_SIZE_WRITE_0_100'] +
-            df['counters']['POSIX_SIZE_WRITE_100_1K'] +
-            df['counters']['POSIX_SIZE_WRITE_1K_10K'] +
-            df['counters']['POSIX_SIZE_WRITE_10K_100K'] +
-            df['counters']['POSIX_SIZE_WRITE_100K_1M']
+                df['counters']['POSIX_SIZE_WRITE_0_100'] +
+                df['counters']['POSIX_SIZE_WRITE_100_1K'] +
+                df['counters']['POSIX_SIZE_WRITE_1K_10K'] +
+                df['counters']['POSIX_SIZE_WRITE_10K_100K'] +
+                df['counters']['POSIX_SIZE_WRITE_100K_1M']
         )
 
-        detected_files = pd.DataFrame(df['counters'].groupby('id')[['INSIGHTS_POSIX_SMALL_READ', 'INSIGHTS_POSIX_SMALL_WRITE']].sum()).reset_index()
+        detected_files = pd.DataFrame(df['counters'].groupby('id')[['INSIGHTS_POSIX_SMALL_READ',
+                                                                    'INSIGHTS_POSIX_SMALL_WRITE']].sum()).reset_index()
         detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules,
+                              file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -368,7 +573,8 @@ def handler():
         total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
         total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-        check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre,
+                         dxt_posix, dxt_posix_read_data)
 
         #########################################################################################################################################################################
 
@@ -377,7 +583,8 @@ def handler():
         max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
-        check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix,
+                      dxt_posix_read_data, dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -393,7 +600,6 @@ def handler():
         read_random = total_reads - read_consecutive - read_sequential
         #print('READ Random: {} ({:.2f}%)'.format(read_random, read_random / total_reads * 100))
 
-
         write_consecutive = df['counters']['POSIX_CONSEC_WRITES'].sum()
 
         write_sequential = df['counters']['POSIX_SEQ_WRITES'].sum()
@@ -402,7 +608,9 @@ def handler():
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
-        check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive,
+                               write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data,
+                               dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -415,44 +623,45 @@ def handler():
         if not shared_files.empty:
             total_shared_reads = shared_files['POSIX_READS'].sum()
             total_shared_reads_small = (
-                shared_files['POSIX_SIZE_READ_0_100'].sum() +
-                shared_files['POSIX_SIZE_READ_100_1K'].sum() +
-                shared_files['POSIX_SIZE_READ_1K_10K'].sum() +
-                shared_files['POSIX_SIZE_READ_10K_100K'].sum() +
-                shared_files['POSIX_SIZE_READ_100K_1M'].sum()
+                    shared_files['POSIX_SIZE_READ_0_100'].sum() +
+                    shared_files['POSIX_SIZE_READ_100_1K'].sum() +
+                    shared_files['POSIX_SIZE_READ_1K_10K'].sum() +
+                    shared_files['POSIX_SIZE_READ_10K_100K'].sum() +
+                    shared_files['POSIX_SIZE_READ_100K_1M'].sum()
             )
 
             shared_files['INSIGHTS_POSIX_SMALL_READS'] = (
-                shared_files['POSIX_SIZE_READ_0_100'] +
-                shared_files['POSIX_SIZE_READ_100_1K'] +
-                shared_files['POSIX_SIZE_READ_1K_10K'] +
-                shared_files['POSIX_SIZE_READ_10K_100K'] +
-                shared_files['POSIX_SIZE_READ_100K_1M']
+                    shared_files['POSIX_SIZE_READ_0_100'] +
+                    shared_files['POSIX_SIZE_READ_100_1K'] +
+                    shared_files['POSIX_SIZE_READ_1K_10K'] +
+                    shared_files['POSIX_SIZE_READ_10K_100K'] +
+                    shared_files['POSIX_SIZE_READ_100K_1M']
             )
-
 
             total_shared_writes = shared_files['POSIX_WRITES'].sum()
             total_shared_writes_small = (
-                shared_files['POSIX_SIZE_WRITE_0_100'].sum() +
-                shared_files['POSIX_SIZE_WRITE_100_1K'].sum() +
-                shared_files['POSIX_SIZE_WRITE_1K_10K'].sum() +
-                shared_files['POSIX_SIZE_WRITE_10K_100K'].sum() +
-                shared_files['POSIX_SIZE_WRITE_100K_1M'].sum()
+                    shared_files['POSIX_SIZE_WRITE_0_100'].sum() +
+                    shared_files['POSIX_SIZE_WRITE_100_1K'].sum() +
+                    shared_files['POSIX_SIZE_WRITE_1K_10K'].sum() +
+                    shared_files['POSIX_SIZE_WRITE_10K_100K'].sum() +
+                    shared_files['POSIX_SIZE_WRITE_100K_1M'].sum()
             )
 
             shared_files['INSIGHTS_POSIX_SMALL_WRITES'] = (
-                shared_files['POSIX_SIZE_WRITE_0_100'] +
-                shared_files['POSIX_SIZE_WRITE_100_1K'] +
-                shared_files['POSIX_SIZE_WRITE_1K_10K'] +
-                shared_files['POSIX_SIZE_WRITE_10K_100K'] +
-                shared_files['POSIX_SIZE_WRITE_100K_1M']
+                    shared_files['POSIX_SIZE_WRITE_0_100'] +
+                    shared_files['POSIX_SIZE_WRITE_100_1K'] +
+                    shared_files['POSIX_SIZE_WRITE_1K_10K'] +
+                    shared_files['POSIX_SIZE_WRITE_10K_100K'] +
+                    shared_files['POSIX_SIZE_WRITE_100K_1M']
             )
 
-            check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
+            check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes,
+                                         total_shared_writes_small, shared_files, file_map)
 
         #########################################################################################################################################################################
 
-        count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > thresholds['metadata_time_rank'][0])])
+        count_long_metadata = len(
+            df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > thresholds['metadata_time_rank'][0])])
 
         check_long_metadata(count_long_metadata, modules)
 
@@ -473,16 +682,20 @@ def handler():
         for index, row in shared_files.iterrows():
             total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
 
-            if total_transfer_size and abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > thresholds['imbalance_stragglers'][0]:
+            if total_transfer_size and abs(
+                    row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > \
+                    thresholds['imbalance_stragglers'][0]:
                 stragglers_count += 1
 
                 detected_files.append([
-                    row['id'], abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
+                    row['id'],
+                    abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
                 ])
 
         column_names = ['id', 'data_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data,
+                                   dxt_posix_write_data)
 
         # POSIX_F_FASTEST_RANK_TIME
         # POSIX_F_SLOWEST_RANK_TIME
@@ -501,11 +714,14 @@ def handler():
         for index, row in shared_files_times.iterrows():
             total_transfer_time = row['POSIX_F_WRITE_TIME'] + row['POSIX_F_READ_TIME'] + row['POSIX_F_META_TIME']
 
-            if total_transfer_time and abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > thresholds['imbalance_stragglers'][0]:
+            if total_transfer_time and abs(
+                    row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > \
+                    thresholds['imbalance_stragglers'][0]:
                 stragglers_count += 1
 
                 detected_files.append([
-                    row['id'], abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
+                    row['id'],
+                    abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
                 ])
 
         column_names = ['id', 'time_imbalance']
@@ -530,11 +746,13 @@ def handler():
         detected_files = []
 
         for index, row in aggregated.iterrows():
-            if row['POSIX_BYTES_WRITTEN_max'] and abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] > thresholds['imbalance_size'][0]:
+            if row['POSIX_BYTES_WRITTEN_max'] and abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / \
+                    row['POSIX_BYTES_WRITTEN_max'] > thresholds['imbalance_size'][0]:
                 imbalance_count += 1
 
                 detected_files.append([
-                    row['id'], abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row['POSIX_BYTES_WRITTEN_max'] * 100
+                    row['id'], abs(row['POSIX_BYTES_WRITTEN_max'] - row['POSIX_BYTES_WRITTEN_min']) / row[
+                        'POSIX_BYTES_WRITTEN_max'] * 100
                 ])
 
         column_names = ['id', 'write_imbalance']
@@ -546,11 +764,13 @@ def handler():
         detected_files = []
 
         for index, row in aggregated.iterrows():
-            if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] > thresholds['imbalance_size'][0]:
+            if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row[
+                'POSIX_BYTES_READ_max'] > thresholds['imbalance_size'][0]:
                 imbalance_count += 1
 
                 detected_files.append([
-                    row['id'], abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] * 100
+                    row['id'],
+                    abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] * 100
                 ])
 
         column_names = ['id', 'read_imbalance']
@@ -570,52 +790,62 @@ def handler():
 
         df_mpiio_collective_reads = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_READS'] > 0)]
 
-        total_mpiio_read_operations = df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters']['MPIIO_COLL_READS'].sum()
+        total_mpiio_read_operations = df_mpiio['counters']['MPIIO_INDEP_READS'].sum() + df_mpiio['counters'][
+            'MPIIO_COLL_READS'].sum()
 
         mpiio_coll_reads = df_mpiio['counters']['MPIIO_COLL_READS'].sum()
         mpiio_indep_reads = df_mpiio['counters']['MPIIO_INDEP_READS'].sum()
 
         detected_files = []
-        if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > thresholds['collective_operations_absolute'][0]:
+        if mpiio_coll_reads == 0 and total_mpiio_read_operations and total_mpiio_read_operations > \
+                thresholds['collective_operations_absolute'][0]:
             files = pd.DataFrame(df_mpiio_collective_reads.groupby('id').sum()).reset_index()
             for index, row in df_mpiio_collective_reads.iterrows():
                 if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
-                    row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > thresholds['collective_operations'][0] and
-                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > thresholds['collective_operations_absolute'][0]):
-
+                        row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        thresholds['collective_operations'][0] and
+                        (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        thresholds['collective_operations_absolute'][0]):
                     detected_files.append([
-                        row['id'], row['MPIIO_INDEP_READS'], row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                        row['id'], row['MPIIO_INDEP_READS'],
+                        row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
                     ])
-        
+
         column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations,
+                                            detected_files, file_map, dxt_mpiio)
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
-        total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
+        total_mpiio_write_operations = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum() + df_mpiio['counters'][
+            'MPIIO_COLL_WRITES'].sum()
 
         mpiio_coll_writes = df_mpiio['counters']['MPIIO_COLL_WRITES'].sum()
         mpiio_indep_writes = df_mpiio['counters']['MPIIO_INDEP_WRITES'].sum()
 
         detected_files = []
-        if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > thresholds['collective_operations_absolute'][0]:
+        if mpiio_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > \
+                thresholds['collective_operations_absolute'][0]:
             files = pd.DataFrame(df_mpiio_collective_writes.groupby('id').sum()).reset_index()
 
             for index, row in df_mpiio_collective_writes.iterrows():
-                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and 
-                    row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > thresholds['collective_operations'][0] and 
-                    (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) > thresholds['collective_operations_absolute'][0]):
-
+                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
+                        row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        thresholds['collective_operations'][0] and
+                        (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        thresholds['collective_operations_absolute'][0]):
                     detected_files.append([
-                        row['id'], row['MPIIO_INDEP_WRITES'], row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                        row['id'], row['MPIIO_INDEP_WRITES'],
+                        row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
                     ])
 
         column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations,
+                                             detected_files, file_map, dxt_mpiio)
 
         #########################################################################################################################################################################
 
@@ -656,7 +886,7 @@ def handler():
         for hint in hints:
             if hint != 'no':
                 (key, value) = hint.split('=')
-            
+
             if key == 'cb_nodes':
                 cb_nodes = value
 
@@ -686,7 +916,7 @@ def handler():
                     pass
         except FileNotFoundError:
             pass
-    
+
     #########################################################################################################################################################################
 
     insights_end_time = time.time()
@@ -721,7 +951,8 @@ def handler():
                 ' [b]FILES[/b]:          [white]{} files ({} use STDIO, {} use POSIX, {} use MPI-IO)[/white]'.format(
                     total_files,
                     total_files_stdio,
-                    total_files_posix - total_files_mpiio,  # Since MPI-IO files will always use POSIX, we can decrement to get a unique count
+                    total_files_posix - total_files_mpiio,
+                    # Since MPI-IO files will always use POSIX, we can decrement to get a unique count
                     total_files_mpiio
                 ),
                 ' [b]COMPUTE NODES[/b]   [white]{}[/white]'.format(

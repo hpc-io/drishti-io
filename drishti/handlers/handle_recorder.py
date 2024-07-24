@@ -7,7 +7,7 @@ import pandas as pd
 from recorder_utils import RecorderReader
 from recorder_utils.build_offset_intervals import build_offset_intervals
 
-from drishti.includes.module import *
+from includes.module import *
 
 
 def get_accessed_files(reader):

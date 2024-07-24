@@ -3,7 +3,11 @@
 import os
 import sys
 from subprocess import call
-from drishti.includes.parser import *
+
+# from includes.parser import * # imports {'parser', 'args', 'argparse'} # TODO: Is next line enuf
+from includes.parser import args
+
+
 
 '''
                          |- handler_darshan   -|
@@ -68,10 +72,10 @@ def main():
     log_type = check_log_type(args.log_paths)
 
     if log_type == LOG_TYPE_DARSHAN:
-        from drishti.handlers.handle_darshan import handler
+        from handlers.handle_darshan import handler
 
     elif log_type == LOG_TYPE_RECORDER:
-        from drishti.handlers.handle_recorder import handler
+        from handlers.handle_recorder import handler
 
     handler()
 
