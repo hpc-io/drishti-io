@@ -22,7 +22,6 @@ setup(
         'darshan==3.4.4.0',
         'rich==12.5.1',
         'recorder-utils',
-        'otf2-parser',
     ],
     packages=find_packages(),
     package_data={

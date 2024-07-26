@@ -5,7 +5,7 @@ import pandas as pd
 
 from rich import print
 from drishti.includes.module import *
-from otf2_parser.otf2csv import otf2_to_csv
+from drishti.includes.supports.otf2csv import otf2_to_csv
 
 
 def handler():

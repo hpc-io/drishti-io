@@ -3,4 +3,3 @@ darshan==3.4.4.0
 pandas
 rich==12.5.1
 recorder-utils
-otf2-parser
