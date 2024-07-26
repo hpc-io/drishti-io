@@ -59,37 +59,41 @@ jobs:
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --issues sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --issues sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
 
       - name: Run Drishti (--code)
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --code sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --code sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
 
       - name: Run DXT Explorer (--verbose)
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --verbose sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --verbose sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
 
       - name: Run DXT Explorer (--path)
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --path sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --path sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
 
       - name: Run DXT Explorer (--html)
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --html sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --html sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
 
       - name: Run DXT Explorer (--svg)
         run: |
           export PATH=/opt/darshan/bin:$PATH
 
-          drishti --svg sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+          drishti --svg sample/darshan/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+        
+      - name: Run DXT Explorer (--verbose) recorder
+        run: |
+          drishti --verbose sample/recorder/lammps_lj_flow_2d_mpiio
 
       - name: Upload Artifact
         if: always()
