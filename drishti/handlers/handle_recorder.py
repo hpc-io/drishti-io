@@ -2,9 +2,11 @@
 
 import os
 import time
+
 import pandas as pd
 from recorder_utils import RecorderReader
 from recorder_utils.build_offset_intervals import build_offset_intervals
+
 from drishti.includes.module import *
 
 
@@ -577,23 +579,12 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
     display_thresholds(console)
     display_footer(console, insights_start_time, insights_end_time)
 
+    # Export to HTML, SVG, and CSV
+    trace_name = os.path.basename(os.path.dirname(args.log_path))
     if args.split_files:
-        filename = '{}.{}.html'.format(args.log_path, fid)
-    else:
-        filename = '{}.html'.format(args.log_path)
+        trace_name = f"{trace_name}.{fid}"
+    out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
-    export_html(console, filename)
-
-    if args.split_files:
-        filename = '{}.{}.svg'.format(args.log_path, fid)
-    else:
-        filename = '{}.svg'.format(args.log_path)
-
-    export_svg(console, filename)
-
-    if args.split_files:
-        filename = '{}.{}.summary.csv'.format(args.log_path, fid)
-    else:
-        filename = '{}-summary.csv'.format(args.log_path)
-    export_csv(filename)
-
+    export_html(console, out_dir, trace_name)
+    export_svg(console, out_dir, trace_name)
+    export_csv(out_dir, trace_name)

@@ -97,6 +97,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--export_dir',
+    default="",
+    dest='export_dir',
+    help='Specify the directory prefix for the output files (if any)'
+)
+
+parser.add_argument(
     '--json', 
     default=False, 
     dest='json',
