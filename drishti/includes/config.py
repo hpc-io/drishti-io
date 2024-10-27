@@ -3,7 +3,7 @@
 import json
 import os
 
-from includes.parser import *
+from drishti.includes.parser import *
 from rich.console import Console, Group
 from rich.padding import Padding
 from rich.panel import Panel

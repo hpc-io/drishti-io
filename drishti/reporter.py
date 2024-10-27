@@ -3,9 +3,10 @@
 import os
 import sys
 from subprocess import call
+from typing import List, Optional
 
 # from includes.parser import * # imports {'parser', 'args', 'argparse'} # TODO: Is next line enuf
-from includes.parser import args
+from drishti.includes.parser import args
 
 '''
                          |- handler_darshan   -|
@@ -29,7 +30,7 @@ def clear():
     _ = call('clear' if os.name == 'posix' else 'cls')
 
 
-def check_log_type(paths: list[str]) -> int | None:
+def check_log_type(paths: List[str]) -> Optional[int]:
     is_darshan = True
     is_recorder = True
     multiple_logs = len(paths) > 1
@@ -70,10 +71,10 @@ def main():
     log_type = check_log_type(args.log_paths)
 
     if log_type == LOG_TYPE_DARSHAN:
-        from handlers.handle_darshan import handler
+        from drishti.handlers.handle_darshan import handler
 
     elif log_type == LOG_TYPE_RECORDER:
-        from handlers.handle_recorder import handler
+        from drishti.handlers.handle_recorder import handler
 
     handler()
 

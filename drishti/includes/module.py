@@ -5,7 +5,7 @@ import datetime
 import time
 
 import pandas as pd
-from includes.config import *
+from drishti.includes.config import *
 from rich import box
 from rich.syntax import Syntax
 
