@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
-import dataclasses
-import io
-import shlex
+import abc
 import csv
+import dataclasses
+import datetime
+import io
+import os
+import shlex
 import shutil
 import subprocess
-import os
 import sys
+import time
 import typing
 from dataclasses import dataclass, field
-from typing import Optional
-import abc
-from typing import List
+from typing import List, Optional
 
 import darshan
-import pandas as pd
-import datetime
 import darshan.backend.cffi_backend as darshanll
+import includes.config as config
+import includes.module as module
+import pandas as pd
+from includes.module import HIGH, RECOMMENDATIONS, WARN, Panel, insights_total
+
+# from includes.module import *
+from includes.parser import args
 from packaging import version
 from rich import print
 from rich.padding import Padding
-
-import includes.config as config
-import includes.module as module
-from includes.module import Panel, insights_total
-from includes.module import HIGH, WARN, RECOMMENDATIONS
-# from includes.module import *
-from includes.parser import args
-import time
 
 
 def is_available(name):

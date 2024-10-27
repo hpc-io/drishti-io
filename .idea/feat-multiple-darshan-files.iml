@@ -12,8 +12,10 @@
       <excludeFolder url="file://$MODULE_DIR$/drishti_io.egg-info" />
       <excludeFolder url="file://$MODULE_DIR$/tensorflow_unet3d_darshan_per_rank_workload" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/backtrace" />
+      <excludeFolder url="file://$MODULE_DIR$/stacktrace" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="drishti" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

@@ -7,8 +7,6 @@ from subprocess import call
 # from includes.parser import * # imports {'parser', 'args', 'argparse'} # TODO: Is next line enuf
 from includes.parser import args
 
-
-
 '''
                          |- handler_darshan   -|
                          |                     |

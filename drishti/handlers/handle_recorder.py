@@ -4,10 +4,9 @@ import os
 import time
 
 import pandas as pd
+from includes.module import *
 from recorder_utils import RecorderReader
 from recorder_utils.build_offset_intervals import build_offset_intervals
-
-from includes.module import *
 
 
 def get_accessed_files(reader):

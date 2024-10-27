@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import datetime
 import csv
+import datetime
 import time
+
 import pandas as pd
+from includes.config import *
 from rich import box
 from rich.syntax import Syntax
-from includes.config import *
 
 '''
 Before calling the functions below

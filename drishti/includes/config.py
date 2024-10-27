@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
-import os
 import json
+import os
 
+from includes.parser import *
 from rich.console import Console, Group
 from rich.padding import Padding
 from rich.panel import Panel
-from rich.terminal_theme import TerminalTheme
-from rich.terminal_theme import MONOKAI
-
-from includes.parser import *
-
+from rich.terminal_theme import MONOKAI, TerminalTheme
 
 RECOMMENDATIONS = 0
 HIGH = 1
