@@ -1,18 +1,59 @@
 #!/usr/bin/env python3
 
+import csv
+import datetime
 import io
-import sys
-import time
+import os
 import shlex
 import shutil
 import subprocess
-import pandas as pd
+import sys
+import time
+
 import darshan
 import darshan.backend.cffi_backend as darshanll
-
-from rich import print
+import pandas as pd
 from packaging import version
-from drishti.includes.module import *
+from rich import print
+from rich.padding import Padding
+from rich.panel import Panel
+
+from drishti.includes.config import (
+    HIGH,
+    RECOMMENDATIONS,
+    WARN,
+    init_console,
+    insights_total,
+    thresholds,
+)
+# from drishti.includes.module import *
+from drishti.includes.module import (
+    check_individual_read_imbalance,
+    check_individual_write_imbalance,
+    check_long_metadata,
+    check_misaligned,
+    check_mpi_aggregator,
+    check_mpi_collective_read_operation,
+    check_mpi_collective_write_operation,
+    check_mpi_none_block_operation,
+    check_mpiio,
+    check_operation_intensive,
+    check_random_operation,
+    check_shared_data_imblance,
+    check_shared_small_operation,
+    check_shared_time_imbalance,
+    check_size_intensive,
+    check_small_operation,
+    check_stdio,
+    check_traffic,
+    display_content,
+    display_footer,
+    display_thresholds,
+    export_csv,
+    export_html,
+    export_svg,
+)
+from drishti.includes.parser import args
 
 
 def is_available(name):
@@ -494,7 +535,7 @@ def handler():
         detected_files = []
 
         stragglers_count = 0
-        stragglers_imbalance = {}
+        # stragglers_imbalance = {}
 
         shared_files_times = shared_files_times.assign(id=lambda d: d['id'].astype(str))
 
