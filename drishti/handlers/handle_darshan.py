@@ -116,7 +116,8 @@ def handler():
 
     insights_start_time = time.time()
 
-    log = darshanll.log_open(args.log_path)
+    darshan_log_path = args.log_paths[0]
+    log = darshanll.log_open(darshan_log_path)
 
     modules = darshanll.log_get_modules(log)
 
@@ -129,8 +130,8 @@ def handler():
     library_version = darshanll.get_lib_version()
 
     # Make sure log format is of the same version
-    filename = args.log_path
-    # check_log_version(console, args.log_path, log_version, library_version)
+    filename = darshan_log_path
+    # check_log_version(console, darshan_log_path, log_version, library_version)
  
     darshanll.log_close(log)
 
@@ -752,7 +753,7 @@ def handler():
                     job['exe'].split()[0]
                 ),
                 ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
-                    os.path.basename(args.log_path)
+                    os.path.basename(darshan_log_path)
                 ),
                 ' [b]EXECUTION TIME[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                     job_start,
@@ -794,7 +795,7 @@ def handler():
     display_footer(console, insights_start_time, insights_end_time)
 
     # Export to HTML, SVG, and CSV
-    trace_name = os.path.basename(args.log_path).replace('.darshan', '')
+    trace_name = os.path.basename(darshan_log_path).replace('.darshan', '')
     out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
 
     export_html(console, out_dir, trace_name)
