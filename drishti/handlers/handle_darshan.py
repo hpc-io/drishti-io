@@ -53,7 +53,8 @@ from drishti.includes.module import (
     export_html,
     export_svg,
 )
-from drishti.includes.parser import args
+import drishti.includes.parser as parser
+# from drishti.includes.parser import args
 
 
 def is_available(name):
@@ -116,7 +117,7 @@ def handler():
 
     insights_start_time = time.time()
 
-    darshan_log_path = args.log_paths[0]
+    darshan_log_path = parser.args.log_paths[0]
     log = darshanll.log_open(darshan_log_path)
 
     modules = darshanll.log_get_modules(log)
@@ -199,12 +200,12 @@ def handler():
     if "LUSTRE" in report.records:
         df_lustre = report.records['LUSTRE'].to_df()
     
-    if args.backtrace:
+    if parser.args.backtrace:
         if "DXT_POSIX" in report.records:
             dxt_posix = report.records["DXT_POSIX"].to_df()
             dxt_posix = pd.DataFrame(dxt_posix)
             if "address_line_mapping" not in dxt_posix:
-                args.backtrace = False
+                parser.args.backtrace = False
             else:
                 read_id = []
                 read_rank = []
@@ -349,7 +350,7 @@ def handler():
         # Get total number of I/O operations
         total_operations = total_writes + total_reads 
 
-        # To check whether the application is write-intersive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
+        # To check whether the application is write-intensive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
         check_operation_intensive(total_operations, total_reads, total_writes)
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
@@ -796,7 +797,7 @@ def handler():
 
     # Export to HTML, SVG, and CSV
     trace_name = os.path.basename(darshan_log_path).replace('.darshan', '')
-    out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
+    out_dir = parser.args.export_dir if parser.args.export_dir != "" else os.getcwd()
 
     export_html(console, out_dir, trace_name)
     export_svg(console, out_dir, trace_name)
