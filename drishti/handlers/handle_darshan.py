@@ -10,8 +10,8 @@ import subprocess
 import sys
 import time
 
-import darshan
-import darshan.backend.cffi_backend as darshanll
+import darshan  # type: ignore
+import darshan.backend.cffi_backend as darshanll  # type: ignore
 import pandas as pd
 from packaging import version
 from rich import print
