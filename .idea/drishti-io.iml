@@ -4,6 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.history" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/sample/tensorflow_unet3d_darshan_per_rank_workload" />
     </content>
     <orderEntry type="jdk" jdkName="uv (drishti-io)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
