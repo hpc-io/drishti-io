@@ -222,9 +222,9 @@ class MPIIndependentIOStats(IOCounter):
 @dataclass
 class AccessPatternStats:
     """Statistics for I/O access patterns by pattern type"""
-    consecutive: ConsecutiveIOStats = field(default_factory=lambda: ConsecutiveIOStats(read=0, write=0))
-    sequential: SequentialIOStats = field(default_factory=lambda: SequentialIOStats(read=0, write=0))
-    random: RandomIOStats = field(default_factory=lambda: RandomIOStats(read=0, write=0))
+    consecutive: ConsecutiveIOStats = field(default_factory=lambda: ConsecutiveIOStats(read=0, write=0), init=True)
+    sequential: SequentialIOStats = field(default_factory=lambda: SequentialIOStats(read=0, write=0), init=True)
+    random: RandomIOStats = field(default_factory=lambda: RandomIOStats(read=0, write=0), init=True)
 
 @dataclass
 class DarshanFile:
