@@ -18,6 +18,8 @@ from rich import print
 from rich.padding import Padding
 from rich.panel import Panel
 
+from drishti.handlers.darshan_util import DarshanFile
+
 from drishti.includes.config import (
     HIGH,
     RECOMMENDATIONS,
