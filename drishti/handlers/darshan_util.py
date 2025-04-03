@@ -3,7 +3,7 @@ import typing
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
-from typing import Dict, Final, Optional, Union
+from typing import Dict, Final, Optional, Union, List, Tuple, Iterable
 
 import pandas as pd
 
@@ -234,14 +234,14 @@ class DarshanFile:
     log_ver: Optional[str] = None
     time: Optional[TimeSpan] = None
     exe: Optional[str] = None
-    modules: Optional[typing.Iterable[str]] = None
-    name_records: Optional[typing.Dict[str, str]] = None
+    modules: Optional[Iterable[str]] = None
+    name_records: Optional[Dict[str, str]] = None
     max_read_offset: Optional[int] = None
     max_write_offset: Optional[int] = None
     total_files_stdio: Optional[int] = None
     total_files_posix: Optional[int] = None
     total_files_mpiio: Optional[int] = None
-    files: Optional[typing.Dict[str, str]] = None
+    files: Optional[Dict[str, str]] = None
     
     # Replace individual I/O stats with IOStatistics class
     io_stats: Optional[IOStatistics] = None
@@ -271,7 +271,7 @@ class DarshanFile:
 
     cb_nodes: Optional[int] = None
     number_of_compute_nodes: Optional[int] = None
-    hints: Optional[list[str]] = None
+    hints: Optional[List[str]] = None
 
     timestamp: Optional[TimeSpan] = None
 
@@ -284,7 +284,7 @@ class DarshanFile:
     detected_files_mpi_coll_writes: Optional[pd.DataFrame] = None
 
     imbalance_count_posix_shared_time: Optional[int] = None
-    posix_shared_time_imbalance_detected_files: Optional[tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]] = None
+    posix_shared_time_imbalance_detected_files: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]] = None
 
 
 
