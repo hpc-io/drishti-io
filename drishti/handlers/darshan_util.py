@@ -57,8 +57,8 @@ class IOOperation(IOCounter):
 class IOStatistics:
     """Tracks both I/O sizes and operations by module with aggregated metrics"""
     # Use dicts to store module-specific data
-    sizes: Dict[Union[ModuleType, str], IOSize] = field(default_factory=dict)
-    operations: Dict[Union[ModuleType, str], IOOperation] = field(default_factory=dict)
+    sizes: Dict[ModuleType, IOSize] = field(init=True)
+    operations: Dict[ModuleType, IOOperation] = field(init=True)
 
     def __post_init__(self):
         # Initialize standard modules if not present
