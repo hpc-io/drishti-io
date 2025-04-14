@@ -10,10 +10,11 @@ import pandas as pd
 
 class ModuleType(str, Enum):
     """Enum for standard I/O module types"""
-    POSIX = "posix"
-    STDIO = "stdio"
-    MPIIO = "mpiio"
-    
+
+    POSIX = "POSIX"
+    STDIO = "STDIO"
+    MPIIO = "MPI-IO"
+
     def __str__(self) -> str:
         return self.value
 
