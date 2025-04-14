@@ -12,13 +12,14 @@ import time
 
 import darshan  # type: ignore
 import darshan.backend.cffi_backend as darshanll  # type: ignore
+import numpy as np
 import pandas as pd
 from packaging import version
 from rich import print
 from rich.padding import Padding
 from rich.panel import Panel
 
-from drishti.handlers.darshan_util import DarshanFile
+from drishti.handlers.darshan_util import DarshanFile, ModuleType
 
 from drishti.includes.config import (
     HIGH,
@@ -28,33 +29,36 @@ from drishti.includes.config import (
     insights_total,
     thresholds,
 )
+
 # from drishti.includes.module import *
-from drishti.includes.module import (
-    check_individual_read_imbalance,
-    check_individual_write_imbalance,
-    check_long_metadata,
-    check_misaligned,
-    check_mpi_aggregator,
-    check_mpi_collective_read_operation,
-    check_mpi_collective_write_operation,
-    check_mpi_none_block_operation,
-    check_mpiio,
-    check_operation_intensive,
-    check_random_operation,
-    check_shared_data_imblance,
-    check_shared_small_operation,
-    check_shared_time_imbalance,
-    check_size_intensive,
-    check_small_operation,
-    check_stdio,
-    check_traffic,
-    display_content,
-    display_footer,
-    display_thresholds,
-    export_csv,
-    export_html,
-    export_svg,
-)
+import drishti.includes.module as module
+
+# from drishti.includes.module import (
+#     check_individual_read_imbalance,
+#     check_individual_write_imbalance,
+#     check_long_metadata,
+#     check_misaligned,
+#     check_mpi_aggregator,
+#     check_mpi_collective_read_operation,
+#     check_mpi_collective_write_operation,
+#     check_mpi_none_block_operation,
+#     check_mpiio,
+#     check_operation_intensive,
+#     check_random_operation,
+#     check_shared_data_imblance,
+#     check_shared_small_operation,
+#     check_shared_time_imbalance,
+#     check_size_intensive,
+#     check_small_operation,
+#     check_stdio,
+#     check_traffic,
+#     display_content,
+#     display_footer,
+#     display_thresholds,
+#     export_csv,
+#     export_html,
+#     export_svg,
+# )
 import drishti.includes.parser as parser
 # from drishti.includes.parser import args
 
@@ -335,8 +339,8 @@ def handler():
             'mpiio': uses_mpiio
         }
 
-    check_stdio(total_size, total_size_stdio)
-    check_mpiio(modules)
+    module.check_stdio(total_size, total_size_stdio)
+    module.check_mpiio(modules)
 
     #########################################################################################################################################################################
 
@@ -353,14 +357,14 @@ def handler():
         total_operations = total_writes + total_reads 
 
         # To check whether the application is write-intensive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
-        check_operation_intensive(total_operations, total_reads, total_writes)
+        module.check_operation_intensive(total_operations, total_reads, total_writes)
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
         total_written_size = df['counters']['POSIX_BYTES_WRITTEN'].sum()
 
         total_size = total_written_size + total_read_size
 
-        check_size_intensive(total_size, total_read_size, total_written_size)
+        module.check_size_intensive(total_size, total_read_size, total_written_size)
 
         #########################################################################################################################################################################
 
@@ -404,7 +408,7 @@ def handler():
         detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -413,7 +417,7 @@ def handler():
         total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
         total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-        check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        module.check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
 
         #########################################################################################################################################################################
 
@@ -422,7 +426,7 @@ def handler():
         max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
-        check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -447,7 +451,7 @@ def handler():
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
-        check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
         #########################################################################################################################################################################
 
@@ -493,13 +497,13 @@ def handler():
                 shared_files['POSIX_SIZE_WRITE_100K_1M']
             )
 
-            check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
+            module.check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
 
         #########################################################################################################################################################################
 
         count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > thresholds['metadata_time_rank'][0])])
 
-        check_long_metadata(count_long_metadata, modules)
+        module.check_long_metadata(count_long_metadata, modules)
 
         # We already have a single line for each shared-file access
         # To check for stragglers, we can check the difference between the 
@@ -527,7 +531,7 @@ def handler():
 
         column_names = ['id', 'data_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
         # POSIX_F_FASTEST_RANK_TIME
         # POSIX_F_SLOWEST_RANK_TIME
@@ -555,7 +559,7 @@ def handler():
 
         column_names = ['id', 'time_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_shared_time_imbalance(stragglers_count, detected_files, file_map)
+        module.check_shared_time_imbalance(stragglers_count, detected_files, file_map)
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
@@ -584,7 +588,7 @@ def handler():
 
         column_names = ['id', 'write_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
+        module.check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
 
         imbalance_count = 0
 
@@ -600,7 +604,7 @@ def handler():
 
         column_names = ['id', 'read_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data)
+        module.check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data)
 
     #########################################################################################################################################################################
 
@@ -635,7 +639,7 @@ def handler():
         column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
@@ -660,7 +664,7 @@ def handler():
         column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
 
         #########################################################################################################################################################################
 
@@ -677,7 +681,7 @@ def handler():
         mpiio_nb_reads = df_mpiio['counters']['MPIIO_NB_READS'].sum()
         mpiio_nb_writes = df_mpiio['counters']['MPIIO_NB_WRITES'].sum()
 
-        check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
+        module.check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
 
     #########################################################################################################################################################################
 
@@ -726,7 +730,7 @@ def handler():
                         NUMBER_OF_COMPUTE_NODES = first['NNodes']
 
                         # Do we have one MPI-IO aggregator per node?
-                        check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
+                        module.check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
                 except StopIteration:
                     pass
         except FileNotFoundError:
@@ -793,14 +797,14 @@ def handler():
 
     console.print()
 
-    display_content(console)
-    display_thresholds(console)
-    display_footer(console, insights_start_time, insights_end_time)
+    module.display_content(console)
+    module.display_thresholds(console)
+    module.display_footer(console, insights_start_time, insights_end_time)
 
     # Export to HTML, SVG, and CSV
     trace_name = os.path.basename(darshan_log_path).replace('.darshan', '')
     out_dir = parser.args.export_dir if parser.args.export_dir != "" else os.getcwd()
 
-    export_html(console, out_dir, trace_name)
-    export_svg(console, out_dir, trace_name)
-    export_csv(out_dir, trace_name, job['job']['jobid'])
+    module.export_html(console, out_dir, trace_name)
+    module.export_svg(console, out_dir, trace_name)
+    module.export_csv(out_dir, trace_name, job['job']['jobid'])
