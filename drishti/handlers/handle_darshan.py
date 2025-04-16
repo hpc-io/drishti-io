@@ -462,7 +462,16 @@ def handler():
         max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
-        module.check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        # module.check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_traffic(
+            max_read_offset=darshan_file_obj.max_read_offset,
+            total_read_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "read"),
+            max_write_offset=darshan_file_obj.max_write_offset,
+            total_written_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "write"),
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 

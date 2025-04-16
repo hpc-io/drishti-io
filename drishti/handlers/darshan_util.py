@@ -243,8 +243,8 @@ class DarshanFile:
     exe: Optional[str] = None
     _modules: Optional[Iterable[str]] = None
     _name_records: Optional[Dict[int, str]] = None  # Keys are uint64
-    max_read_offset: Optional[int] = None
-    max_write_offset: Optional[int] = None
+    _max_read_offset: Optional[int] = None
+    _max_write_offset: Optional[int] = None
     total_files_stdio: Optional[int] = None
     total_files_posix: Optional[int] = None
     total_files_mpiio: Optional[int] = None
@@ -570,3 +570,19 @@ class DarshanFile:
         if "LUSTRE" not in self.modules:
             return None
         return pd.DataFrame(self.report.records["LUSTRE"].to_df())
+
+    @cached_property
+    def max_read_offset(self) -> int:
+        if self._max_read_offset is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._max_read_offset = posix_counters['POSIX_MAX_BYTE_READ'].max()
+        return self._max_read_offset
+
+    @cached_property
+    def max_write_offset(self) -> int:
+        if self._max_write_offset is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._max_write_offset = posix_counters['POSIX_MAX_BYTE_WRITTEN'].max()
+        return self._max_write_offset
