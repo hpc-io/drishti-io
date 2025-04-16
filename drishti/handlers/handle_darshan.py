@@ -149,6 +149,9 @@ def handler():
     job = report.metadata
 
     #########################################################################################################################################################################
+    darshan_file_obj = DarshanFile(file_path=darshan_log_path)
+
+    #########################################################################################################################################################################
 
     # Check usage of STDIO, POSIX, and MPI-IO per file
 
@@ -205,14 +208,17 @@ def handler():
     df_lustre = None
     if "LUSTRE" in report.records:
         df_lustre = report.records['LUSTRE'].to_df()
-    
     if parser.args.backtrace:
         if "DXT_POSIX" in report.records:
             dxt_posix = report.records["DXT_POSIX"].to_df()
             dxt_posix = pd.DataFrame(dxt_posix)
-            if "address_line_mapping" not in dxt_posix:
-                parser.args.backtrace = False
+            if False:
+            # if "address_line_mapping" not in dxt_posix:
+                # parser.args.backtrace = False # TODO
+                print("Upper")
+                pass
             else:
+                print("ENTERED")
                 read_id = []
                 read_rank = []
                 read_length = []
@@ -339,8 +345,10 @@ def handler():
             'mpiio': uses_mpiio
         }
 
-    module.check_stdio(total_size, total_size_stdio)
-    module.check_mpiio(modules)
+    # module.check_stdio(total_size, total_size_stdio)
+    module.check_stdio(total_size=darshan_file_obj.io_stats.total_bytes, total_size_stdio=darshan_file_obj.io_stats.stdio_size)
+    # module.check_mpiio(modules)
+    module.check_mpiio(modules=darshan_file_obj.modules)
 
     #########################################################################################################################################################################
 
@@ -357,14 +365,24 @@ def handler():
         total_operations = total_writes + total_reads 
 
         # To check whether the application is write-intensive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
-        module.check_operation_intensive(total_operations, total_reads, total_writes)
+        # module.check_operation_intensive(total_operations, total_reads, total_writes)
+        module.check_operation_intensive(
+            total_operations=darshan_file_obj.io_stats.posix_ops,
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read"),
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "write"),
+        )
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
         total_written_size = df['counters']['POSIX_BYTES_WRITTEN'].sum()
 
         total_size = total_written_size + total_read_size
 
-        module.check_size_intensive(total_size, total_read_size, total_written_size)
+        # module.check_size_intensive(total_size, total_read_size, total_written_size)
+        module.check_size_intensive(
+            total_size=darshan_file_obj.io_stats.total_bytes,
+            total_read_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "read"),
+            total_written_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "write"),
+        )
 
         #########################################################################################################################################################################
 
@@ -408,7 +426,21 @@ def handler():
         detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        module.check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+
+        # module.check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        parser.args.backtrace = True # TODO
+
+        module.check_small_operation(
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read"),
+            total_reads_small=darshan_file_obj.posix_small_io.read,
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "write"),
+            total_writes_small=darshan_file_obj.posix_small_io.write,
+            detected_files=darshan_file_obj.posix_detected_small_files, modules=darshan_file_obj.modules,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -506,7 +538,7 @@ def handler():
         module.check_long_metadata(count_long_metadata, modules)
 
         # We already have a single line for each shared-file access
-        # To check for stragglers, we can check the difference between the 
+        # To check for stragglers, we can check the difference between the
 
         # POSIX_FASTEST_RANK_BYTES
         # POSIX_SLOWEST_RANK_BYTES

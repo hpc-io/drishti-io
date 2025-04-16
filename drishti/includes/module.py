@@ -4,6 +4,7 @@ import csv
 import datetime
 import os
 import time
+import typing
 
 import pandas as pd
 from rich import box
@@ -73,7 +74,7 @@ def check_stdio(total_size, total_size_stdio):
         )
 
 
-def check_mpiio(modules):
+def check_mpiio(modules: typing.Iterable[str]):
     """
     Check whether the application has used MPI-IO or not
 

@@ -3,9 +3,13 @@ import typing
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
+from os import write
 from typing import Dict, Final, Optional, Union, List, Tuple, Iterable
 
+import numpy as np
 import pandas as pd
+from darshan import DarshanReport  # type: ignore
+import drishti.includes.parser as parser
 
 
 class ModuleType(str, Enum):
@@ -231,12 +235,14 @@ class AccessPatternStats:
 class DarshanFile:
     # TODO: All fields which are not calculated should be instantly populated and not optional
     # TODO: Explore using typeddicts instead of dicts
+    file_path: str
+    _darshan_report: Optional[DarshanReport] = None
     job_id: Optional[str] = None
     log_ver: Optional[str] = None
     time: Optional[TimeSpan] = None
     exe: Optional[str] = None
-    modules: Optional[Iterable[str]] = None
-    name_records: Optional[Dict[str, str]] = None
+    _modules: Optional[Iterable[str]] = None
+    _name_records: Optional[Dict[int, str]] = None  # Keys are uint64
     max_read_offset: Optional[int] = None
     max_write_offset: Optional[int] = None
     total_files_stdio: Optional[int] = None
@@ -245,20 +251,22 @@ class DarshanFile:
     files: Optional[Dict[str, str]] = None
     
     # Replace individual I/O stats with IOStatistics class
-    io_stats: Optional[IOStatistics] = None
-    
+    _io_stats: Optional[IOStatistics] = None
+
     # File counts
     total_files: Optional[int] = 0
     
     # Additional I/O statistics organized by category
-    small_io: Optional[SmallIOStats] = None
-    
+    _posix_small_io: Optional[SmallIOStats] = None
+
+    _posix_detected_small_files: Optional[pd.DataFrame] = None
+
     # Direct alignment fields instead of a class
     mem_not_aligned: Optional[int] = None
     file_not_aligned: Optional[int] = None
-    
+
     access_pattern: Optional[AccessPatternStats] = None
-    
+
     # Use separate classes for shared operations
     shared_ops: Optional[SharedOpsStats] = None
     shared_small_ops: Optional[SharedSmallOpsStats] = None
@@ -287,5 +295,259 @@ class DarshanFile:
     imbalance_count_posix_shared_time: Optional[int] = None
     posix_shared_time_imbalance_detected_files: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]] = None
 
+    @cached_property
+    def report(self) -> DarshanReport:
+        if self._darshan_report is None:
+            self._darshan_report = DarshanReport(self.file_path)
+        return self._darshan_report
+
+    @cached_property
+    def modules(self) -> Iterable[str]:
+        if self._modules is None:
+            self._modules = set(self.report.records.keys())
+        return self._modules
+
+    @cached_property
+    def io_stats(self) -> IOStatistics:
+        if self._io_stats is None:
+            # Calculate I/O sizes
+            sizes: Dict[ModuleType, IOSize] = {}
+            ops: Dict[ModuleType, IOOperation] = {}
+            if ModuleType.STDIO in self.modules:
+                df = self.report.records[ModuleType.STDIO].to_df()
+                counters = df["counters"]
+                assert df, "STDIO module data frame is empty"
+
+                stdio_read_size = counters["STDIO_BYTES_READ"].sum()
+                stdio_write_size = counters["STDIO_BYTES_WRITTEN"].sum()
+                sizes[ModuleType.STDIO] = IOSize(
+                    read=stdio_read_size, write=stdio_write_size
+                )
+
+                stdio_read_ops = counters["STDIO_READS"].sum()
+                stdio_write_ops = counters["STDIO_WRITES"].sum()
+                ops[ModuleType.STDIO] = IOOperation(
+                    read=stdio_read_ops, write=stdio_write_ops
+                )
+
+            if ModuleType.POSIX in self.modules:
+                df = self.report.records[ModuleType.POSIX].to_df()
+                counters = df["counters"]
+                assert df, "POSIX module data frame is empty"
+
+                posix_write_size = counters["POSIX_BYTES_WRITTEN"].sum()
+                posix_read_size = counters["POSIX_BYTES_READ"].sum()
+                sizes[ModuleType.POSIX] = IOSize(
+                    read=posix_read_size, write=posix_write_size
+                )
+
+                posix_read_ops = counters["POSIX_READS"].sum()
+                posix_write_ops = counters["POSIX_WRITES"].sum()
+                ops[ModuleType.POSIX] = IOOperation(
+                    read=posix_read_ops, write=posix_write_ops
+                )
+
+            if ModuleType.MPIIO in self.modules:
+                df = self.report.records[ModuleType.MPIIO].to_df()
+                counters = df["counters"]
+                assert df, "MPIIO module data frame is empty"
+
+                mpiio_write_size = counters["MPIIO_BYTES_WRITTEN"].sum()
+                mpiio_read_size = counters["MPIIO_BYTES_READ"].sum()
+                sizes[ModuleType.MPIIO] = IOSize(
+                    read=mpiio_read_size, write=mpiio_write_size
+                )
+
+                mpiio_read_ops = -1
+                mpiio_write_ops = -1
+                ops[ModuleType.MPIIO] = IOOperation(
+                    read=mpiio_read_ops, write=mpiio_write_ops
+                )
+
+            self._io_stats = IOStatistics(sizes=sizes, operations=ops)
+        return self._io_stats
+
+    @cached_property
+    def posix_small_io(self) -> SmallIOStats:
+        if self._posix_small_io is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            posix_reads_small = (
+                posix_counters["POSIX_SIZE_READ_0_100"].sum()
+                + posix_counters["POSIX_SIZE_READ_100_1K"].sum()
+                + posix_counters["POSIX_SIZE_READ_1K_10K"].sum()
+                + posix_counters["POSIX_SIZE_READ_10K_100K"].sum()
+                + posix_counters["POSIX_SIZE_READ_100K_1M"].sum()
+            )
+            posix_writes_small = (
+                posix_counters["POSIX_SIZE_WRITE_0_100"].sum()
+                + posix_counters["POSIX_SIZE_WRITE_100_1K"].sum()
+                + posix_counters["POSIX_SIZE_WRITE_1K_10K"].sum()
+                + posix_counters["POSIX_SIZE_WRITE_10K_100K"].sum()
+                + posix_counters["POSIX_SIZE_WRITE_100K_1M"].sum()
+            )
+            self._posix_small_io = SmallIOStats(
+                read=posix_reads_small, write=posix_writes_small
+            )
+        return self._posix_small_io
+
+    @property
+    def posix_detected_small_files(self) -> pd.DataFrame:
+        if self._posix_detected_small_files is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            posix_counters["INSIGHTS_POSIX_SMALL_READ"] = (
+                posix_counters["POSIX_SIZE_READ_0_100"]
+                + posix_counters["POSIX_SIZE_READ_100_1K"]
+                + posix_counters["POSIX_SIZE_READ_1K_10K"]
+                + posix_counters["POSIX_SIZE_READ_10K_100K"]
+                + posix_counters["POSIX_SIZE_READ_100K_1M"]
+            )
+            posix_counters["INSIGHTS_POSIX_SMALL_WRITE"] = (
+                posix_counters["POSIX_SIZE_WRITE_0_100"]
+                + posix_counters["POSIX_SIZE_WRITE_100_1K"]
+                + posix_counters["POSIX_SIZE_WRITE_1K_10K"]
+                + posix_counters["POSIX_SIZE_WRITE_10K_100K"]
+                + posix_counters["POSIX_SIZE_WRITE_100K_1M"]
+            )
+            detected_files = pd.DataFrame(
+                posix_counters.groupby("id")[
+                    ["INSIGHTS_POSIX_SMALL_READ", "INSIGHTS_POSIX_SMALL_WRITE"]
+                ].sum()
+            ).reset_index()
+            detected_files.columns = pd.Index(["id", "total_reads", "total_writes"])
+            detected_files.loc[:, "id"] = detected_files.loc[:, "id"].astype(str)
+            self._posix_detected_small_files = detected_files
+        return self._posix_detected_small_files
+
+    @property
+    def file_map(self) -> Dict[int, str]:
+        return self.name_records
+
+    @cached_property
+    def name_records(self) -> Dict[int, str]:
+        if self._name_records is None:
+            self._name_records = self.report.name_records
+        return self._name_records
+
+    @property
+    def dxt_posix_df(self) -> Optional[pd.DataFrame]:
+        # TODO
+        # if parser.args.backtrace is False:
+        #     return None
+        assert "DXT_POSIX" in self.modules, "Missing DXT_POSIX module"
+        dxt_posix_df = pd.DataFrame(self.report.records["DXT_POSIX"].to_df())
+        return dxt_posix_df
+
+    @property
+    def dxt_posix_read_df(self) -> Optional[pd.DataFrame]:
+        if parser.args.backtrace is False:
+            return None
+        assert "DXT_POSIX" in self.modules, "Missing DXT_POSIX module"
+        df = self.dxt_posix_df
+        assert df is not None, "Should be handled by parser.args.backtrace check"
+
+        # TODO
+        # if "address_line_mapping" not in df:
+        #     parser.args.backtrace = False
+        #     return None
+
+        read_id = []
+        read_rank = []
+        read_length = []
+        read_offsets = []
+        read_end_time = []
+        read_start_time = []
+        read_operation = []
+
+        for r in zip(df["rank"], df["read_segments"], df["write_segments"], df["id"]):
+            if not r[1].empty:
+                read_id.append([r[3]] * len((r[1]["length"].to_list())))
+                read_rank.append([r[0]] * len((r[1]["length"].to_list())))
+                read_length.append(r[1]["length"].to_list())
+                read_end_time.append(r[1]["end_time"].to_list())
+                read_start_time.append(r[1]["start_time"].to_list())
+                read_operation.append(["read"] * len((r[1]["length"].to_list())))
+                read_offsets.append(r[1]["offset"].to_list())
+
+        read_id = [element for nestedlist in read_id for element in nestedlist]
+        read_rank = [element for nestedlist in read_rank for element in nestedlist]
+        read_length = [element for nestedlist in read_length for element in nestedlist]
+        read_offsets = [
+            element for nestedlist in read_offsets for element in nestedlist
+        ]
+        read_end_time = [
+            element for nestedlist in read_end_time for element in nestedlist
+        ]
+        read_operation = [
+            element for nestedlist in read_operation for element in nestedlist
+        ]
+        read_start_time = [
+            element for nestedlist in read_start_time for element in nestedlist
+        ]
+
+        dxt_posix_read_data = {
+            "id": read_id,
+            "rank": read_rank,
+            "length": read_length,
+            "end_time": read_end_time,
+            "start_time": read_start_time,
+            "operation": read_operation,
+            "offsets": read_offsets,
+        }
+
+        return pd.DataFrame(dxt_posix_read_data)
+
+    @property
+    def dxt_posix_write_df(self) -> Optional[pd.DataFrame]:
+        if parser.args.backtrace is False:
+            return None
+        assert "DXT_POSIX" in self.modules, "Missing DXT_POSIX module"
+        df = self.dxt_posix_df
+        assert df is not None, "Should be handled by parser.args.backtrace check"
+
+        # TODO
+        # if "address_line_mapping" not in df:
+        #     parser.args.backtrace = False
+        #     return None
+
+        write_id = []
+        write_rank = []
+        write_length = []
+        write_offsets = []
+        write_end_time = []
+        write_start_time = []
+        write_operation = []
+
+        for r in zip(df['rank'], df['read_segments'], df['write_segments'], df['id']):
+            if not r[2].empty:
+                write_id.append([r[3]] * len((r[2]['length'].to_list())))
+                write_rank.append([r[0]] * len((r[2]['length'].to_list())))
+                write_length.append(r[2]['length'].to_list())
+                write_end_time.append(r[2]['end_time'].to_list())
+                write_start_time.append(r[2]['start_time'].to_list())
+                write_operation.append(['write'] * len((r[2]['length'].to_list())))
+                write_offsets.append(r[2]['offset'].to_list())
 
 
+        write_id = [element for nestedlist in write_id for element in nestedlist]
+        write_rank = [element for nestedlist in write_rank for element in nestedlist]
+        write_length = [element for nestedlist in write_length for element in nestedlist]
+        write_offsets = [element for nestedlist in write_offsets for element in nestedlist]
+        write_end_time = [element for nestedlist in write_end_time for element in nestedlist]
+        write_operation = [element for nestedlist in write_operation for element in nestedlist]
+        write_start_time = [element for nestedlist in write_start_time for element in nestedlist]
+
+
+        dxt_posix_write_data = pd.DataFrame(
+            {
+                'id': write_id,
+                'rank': write_rank,
+                'length': write_length,
+                'end_time': write_end_time,
+                'start_time': write_start_time,
+                'operation': write_operation,
+                'offsets': write_offsets,
+            })
+
+        return pd.DataFrame(dxt_posix_write_data)
