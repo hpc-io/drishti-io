@@ -212,13 +212,9 @@ def handler():
         if "DXT_POSIX" in report.records:
             dxt_posix = report.records["DXT_POSIX"].to_df()
             dxt_posix = pd.DataFrame(dxt_posix)
-            if False:
-            # if "address_line_mapping" not in dxt_posix:
-                # parser.args.backtrace = False # TODO
-                print("Upper")
-                pass
+            if "address_line_mapping" not in dxt_posix:
+                parser.args.backtrace = False
             else:
-                print("ENTERED")
                 read_id = []
                 read_rank = []
                 read_length = []
@@ -428,8 +424,6 @@ def handler():
 
 
         # module.check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
-        parser.args.backtrace = True # TODO
-
         module.check_small_operation(
             total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read"),
             total_reads_small=darshan_file_obj.posix_small_io.read,

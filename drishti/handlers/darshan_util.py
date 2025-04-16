@@ -432,9 +432,8 @@ class DarshanFile:
 
     @property
     def dxt_posix_df(self) -> Optional[pd.DataFrame]:
-        # TODO
-        # if parser.args.backtrace is False:
-        #     return None
+        if parser.args.backtrace is False:
+            return None
         assert "DXT_POSIX" in self.modules, "Missing DXT_POSIX module"
         dxt_posix_df = pd.DataFrame(self.report.records["DXT_POSIX"].to_df())
         return dxt_posix_df
@@ -447,10 +446,9 @@ class DarshanFile:
         df = self.dxt_posix_df
         assert df is not None, "Should be handled by parser.args.backtrace check"
 
-        # TODO
-        # if "address_line_mapping" not in df:
-        #     parser.args.backtrace = False
-        #     return None
+        if "address_line_mapping" not in df:
+            parser.args.backtrace = False
+            return None
 
         read_id = []
         read_rank = []
@@ -506,10 +504,9 @@ class DarshanFile:
         df = self.dxt_posix_df
         assert df is not None, "Should be handled by parser.args.backtrace check"
 
-        # TODO
-        # if "address_line_mapping" not in df:
-        #     parser.args.backtrace = False
-        #     return None
+        if "address_line_mapping" not in df:
+            parser.args.backtrace = False
+            return None
 
         write_id = []
         write_rank = []
