@@ -262,8 +262,8 @@ class DarshanFile:
     _posix_detected_small_files: Optional[pd.DataFrame] = None
 
     # Direct alignment fields instead of a class
-    mem_not_aligned: Optional[int] = None
-    file_not_aligned: Optional[int] = None
+    _mem_not_aligned: Optional[int] = None
+    _file_not_aligned: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
@@ -548,3 +548,25 @@ class DarshanFile:
             })
 
         return pd.DataFrame(dxt_posix_write_data)
+
+    @cached_property
+    def mem_not_aligned(self) -> int:
+        if self._mem_not_aligned is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._mem_not_aligned = posix_counters['POSIX_MEM_NOT_ALIGNED'].sum()
+        return self._mem_not_aligned
+
+    @cached_property
+    def file_not_aligned(self) -> int:
+        if self._file_not_aligned is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._file_not_aligned = posix_counters['POSIX_FILE_NOT_ALIGNED'].sum()
+        return self._file_not_aligned
+
+    @property
+    def lustre_df(self) -> Optional[pd.DataFrame]:
+        if "LUSTRE" not in self.modules:
+            return None
+        return pd.DataFrame(self.report.records["LUSTRE"].to_df())

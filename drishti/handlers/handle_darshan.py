@@ -358,7 +358,7 @@ def handler():
         total_writes = df['counters']['POSIX_WRITES'].sum()
 
         # Get total number of I/O operations
-        total_operations = total_writes + total_reads 
+        total_operations = total_writes + total_reads
 
         # To check whether the application is write-intensive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
         # module.check_operation_intensive(total_operations, total_reads, total_writes)
@@ -443,7 +443,17 @@ def handler():
         total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
         total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-        module.check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        # module.check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        module.check_misaligned(
+            total_operations=darshan_file_obj.io_stats.posix_ops,
+            total_mem_not_aligned=darshan_file_obj.mem_not_aligned,
+            total_file_not_aligned=darshan_file_obj.file_not_aligned,
+            modules=darshan_file_obj.modules,
+            file_map=darshan_file_obj.file_map,
+            df_lustre=darshan_file_obj.lustre_df,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+        )
 
         #########################################################################################################################################################################
 
