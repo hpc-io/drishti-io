@@ -496,7 +496,30 @@ def handler():
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
-        module.check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+
+        assert read_consecutive == darshan_file_obj.posix_read_consecutive
+        assert read_sequential == darshan_file_obj.posix_read_sequential
+        assert read_random == darshan_file_obj.posix_read_random, f"{read_random} != {darshan_file_obj.posix_read_random}"
+        assert total_reads == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"), f"{total_reads} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read")}"
+        assert write_consecutive == darshan_file_obj.posix_write_consecutive
+        assert write_sequential == darshan_file_obj.posix_write_sequential
+        assert write_random == darshan_file_obj.posix_write_random
+        assert total_writes == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"write")
+
+        # module.check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_random_operation(
+            read_consecutive=darshan_file_obj.posix_read_consecutive,
+            read_sequential=darshan_file_obj.posix_read_sequential,
+            read_random=darshan_file_obj.posix_read_random,
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"),
+            write_consecutive=darshan_file_obj.posix_write_consecutive,
+            write_sequential=darshan_file_obj.posix_write_sequential,
+            write_random=darshan_file_obj.posix_write_random,
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"write"),
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 

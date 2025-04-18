@@ -265,6 +265,13 @@ class DarshanFile:
     _mem_not_aligned: Optional[int] = None
     _file_not_aligned: Optional[int] = None
 
+    _posix_read_consecutive: Optional[int] = None
+    _posix_write_consecutive: Optional[int] = None
+    _posix_read_sequential: Optional[int] = None
+    _posix_write_sequential: Optional[int] = None
+    _posix_read_random: Optional[int] = None
+    _posix_write_random: Optional[int] = None
+
     access_pattern: Optional[AccessPatternStats] = None
 
     # Use separate classes for shared operations
@@ -586,3 +593,51 @@ class DarshanFile:
             posix_counters = posix_df["counters"]
             self._max_write_offset = posix_counters['POSIX_MAX_BYTE_WRITTEN'].max()
         return self._max_write_offset
+
+    @cached_property
+    def posix_read_consecutive(self) -> int:
+        if self._posix_read_consecutive is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_read_consecutive = posix_counters['POSIX_CONSEC_READS'].sum()
+        return self._posix_read_consecutive
+
+    @cached_property
+    def posix_write_consecutive(self) -> int:
+        if self._posix_write_consecutive is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_write_consecutive = posix_counters['POSIX_CONSEC_WRITES'].sum()
+        return self._posix_write_consecutive
+
+    @cached_property
+    def posix_read_sequential(self) -> int:
+        if self._posix_read_sequential is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_read_sequential = posix_counters['POSIX_SEQ_READS'].sum() - self.posix_read_consecutive
+        return self._posix_read_sequential
+
+    @cached_property
+    def posix_write_sequential(self) -> int:
+        if self._posix_write_sequential is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_write_sequential = posix_counters['POSIX_SEQ_WRITES'].sum() - self.posix_write_consecutive
+        return self._posix_write_sequential
+
+    @cached_property
+    def posix_read_random(self) -> int:
+        if self._posix_read_random is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_read_random = self.io_stats.get_module_ops(ModuleType.POSIX, "read") - self.posix_read_consecutive - self.posix_read_sequential
+        return self._posix_read_random
+
+    @cached_property
+    def posix_write_random(self) -> int:
+        if self._posix_write_random is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._posix_write_random = self.io_stats.get_module_ops(ModuleType.POSIX, "write") - self.posix_write_consecutive - self.posix_write_sequential
+        return self._posix_write_random
