@@ -320,7 +320,7 @@ class DarshanFile:
     _posix_write_random: Optional[int] = None
 
     _posix_long_metadata_count: Optional[int] = None
-    _posix_stragglers_count: Optional[int] = None
+    _posix_data_stragglers_count: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
@@ -759,7 +759,7 @@ class DarshanFile:
         return self._posix_long_metadata_count
 
     @property
-    def posix_stragglers_df(self) -> pd.DataFrame:
+    def posix_data_stragglers_df(self) -> pd.DataFrame:
         shared_files = self.posix_shared_files_df
 
         detected_files = []
@@ -794,7 +794,7 @@ class DarshanFile:
         return detected_files
 
     @cached_property
-    def posix_stragglers_count(self) -> int:
-        if self._posix_stragglers_count is None:
-            self._posix_stragglers_count = len(self.posix_stragglers_df)
-        return self._posix_stragglers_count
+    def posix_data_stragglers_count(self) -> int:
+        if self._posix_data_stragglers_count is None:
+            self._posix_data_stragglers_count = len(self.posix_data_stragglers_df)
+        return self._posix_data_stragglers_count
