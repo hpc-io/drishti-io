@@ -566,6 +566,9 @@ def handler():
                 shared_files['POSIX_SIZE_WRITE_100K_1M']
             )
 
+            # module.check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
+            assert total_shared_reads == darshan_file_obj.posix_shared_reads
+            sys.exit(2)
             module.check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
 
         #########################################################################################################################################################################
@@ -603,7 +606,22 @@ def handler():
 
         column_names = ['id', 'data_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        module.check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        assert stragglers_count == darshan_file_obj.posix_stragglers_count, f"{stragglers_count} != {darshan_file_obj.posix_stragglers_count}"
+        assert detected_files.equals(darshan_file_obj.posix_stragglers_df), f"{detected_files} != {darshan_file_obj.posix_stragglers_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        assert dxt_posix == darshan_file_obj.dxt_posix_df, f"{dxt_posix} != {darshan_file_obj.dxt_posix_df}"
+        assert dxt_posix_read_data == darshan_file_obj.dxt_posix_read_df, f"{dxt_posix_read_data} != {darshan_file_obj.dxt_posix_read_df}"
+        assert dxt_posix_write_data == darshan_file_obj.dxt_posix_write_df, f"{dxt_posix_write_data} != {darshan_file_obj.dxt_posix_write_df}"
+        # module.check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_shared_data_imblance(
+            stragglers_count=darshan_file_obj.posix_stragglers_count,
+            detected_files=darshan_file_obj.posix_stragglers_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data = darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data = darshan_file_obj.dxt_posix_write_df
+        )
+        sys.exit(2)
 
         # POSIX_F_FASTEST_RANK_TIME
         # POSIX_F_SLOWEST_RANK_TIME

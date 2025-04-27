@@ -274,11 +274,12 @@ class DarshanFile:
     _posix_write_random: Optional[int] = None
 
     _posix_long_metadata_count: Optional[int] = None
+    _posix_stragglers_count: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
     # Use separate classes for shared operations
-    shared_ops: Optional[SharedOpsStats] = None
+    _shared_ops: Optional[SharedOpsStats] = None
     shared_small_ops: Optional[SharedSmallOpsStats] = None
 
     count_long_metadata: Optional[int] = None
@@ -645,6 +646,36 @@ class DarshanFile:
             self._posix_write_random = self.io_stats.get_module_ops(ModuleType.POSIX, "write") - self.posix_write_consecutive - self.posix_write_sequential
         return self._posix_write_random
 
+    @property
+    def posix_shared_files_df(self) -> pd.DataFrame:
+        assert "POSIX" in self.modules, "Missing POSIX module"
+        posix_df = self.report.records[ModuleType.POSIX].to_df()
+        shared_files_df = posix_df['counters'].loc[(posix_df['counters']['rank'] == -1)]
+        shared_files_df = shared_files_df.assign(id=lambda d: d['id'].astype(str))
+        return shared_files_df
+
+    @cached_property
+    def posix_shared_reads(self) -> int:
+        if self._shared_ops is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._shared_ops = SharedOpsStats(
+                read=posix_counters["POSIX_SHARED_READS"].sum(),
+                write=posix_counters["POSIX_SHARED_WRITES"].sum(),
+            )
+        return self._shared_ops.read
+
+    @cached_property
+    def posix_shared_writes(self) -> int:
+        if self._shared_ops is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_counters = posix_df["counters"]
+            self._shared_ops = SharedOpsStats(
+                read=posix_counters["POSIX_SHARED_READS"].sum(),
+                write=posix_counters["POSIX_SHARED_WRITES"].sum(),
+            )
+        return self._shared_ops.write
+
     @cached_property
     def posix_long_metadata_count(self) -> int:
         if self._posix_long_metadata_count is None:
@@ -652,3 +683,32 @@ class DarshanFile:
             posix_long_metadata_rows = posix_df['fcounters'][(posix_df['fcounters']['POSIX_F_META_TIME'] > config.thresholds['metadata_time_rank'][0])]
             self._posix_long_metadata_count = len(posix_long_metadata_rows)
         return self._posix_long_metadata_count
+
+    @property
+    def posix_stragglers_df(self) -> pd.DataFrame:
+        shared_files = self.posix_shared_files_df
+
+        detected_files = []
+
+        for index, row in shared_files.iterrows():
+            total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
+
+            if total_transfer_size and abs(
+                    row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > \
+                    config.thresholds['imbalance_stragglers'][0]:
+                # stragglers_count += 1
+
+                detected_files.append([
+                    row['id'],
+                    abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
+                ])
+
+        column_names = ['id', 'data_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+        return  detected_files
+
+    @cached_property
+    def posix_stragglers_count(self) -> int:
+        if self._posix_stragglers_count is None:
+            self._posix_stragglers_count = len(self.posix_stragglers_df)
+        return self._posix_stragglers_count
