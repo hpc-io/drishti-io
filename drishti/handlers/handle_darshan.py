@@ -648,7 +648,18 @@ def handler():
 
         column_names = ['id', 'time_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        module.check_shared_time_imbalance(stragglers_count, detected_files, file_map)
+
+        assert stragglers_count == darshan_file_obj.posix_time_stragglers_count, f"{stragglers_count} != {darshan_file_obj.posix_time_stragglers_count}"
+        assert detected_files.equals(darshan_file_obj.posix_time_stragglers_df), f"{detected_files} != {darshan_file_obj.posix_time_stragglers_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+
+        # module.check_shared_time_imbalance(stragglers_count, detected_files, file_map)
+        module.check_shared_time_imbalance(
+            stragglers_count=darshan_file_obj.posix_time_stragglers_count,
+            detected_files=darshan_file_obj.posix_time_stragglers_df,
+            file_map=darshan_file_obj.file_map,
+        )
+        sys.exit(2)
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']

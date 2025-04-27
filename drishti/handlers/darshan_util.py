@@ -321,6 +321,7 @@ class DarshanFile:
 
     _posix_long_metadata_count: Optional[int] = None
     _posix_data_stragglers_count: Optional[int] = None
+    _posix_time_stragglers_count: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
@@ -798,3 +799,41 @@ class DarshanFile:
         if self._posix_data_stragglers_count is None:
             self._posix_data_stragglers_count = len(self.posix_data_stragglers_df)
         return self._posix_data_stragglers_count
+
+    @property
+    def posix_time_stragglers_df(self) -> pd.DataFrame:
+        df = self.report.records[ModuleType.POSIX].to_df()
+
+        shared_files_times = df['fcounters'].loc[(df['fcounters']['rank'] == -1)]
+
+        # Get the files responsible
+        detected_files = []
+
+        # stragglers_count = 0
+        # stragglers_imbalance = {}
+
+        shared_files_times = shared_files_times.assign(id=lambda d: d['id'].astype(str))
+
+        for index, row in shared_files_times.iterrows():
+            total_transfer_time = row['POSIX_F_WRITE_TIME'] + row['POSIX_F_READ_TIME'] + row['POSIX_F_META_TIME']
+
+            if total_transfer_time and abs(
+                    row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time > \
+                    config.thresholds['imbalance_stragglers'][0]:
+                # stragglers_count += 1
+
+                detected_files.append([
+                    row['id'],
+                    abs(row['POSIX_F_SLOWEST_RANK_TIME'] - row['POSIX_F_FASTEST_RANK_TIME']) / total_transfer_time * 100
+                ])
+
+        column_names = ['id', 'time_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+
+        return detected_files
+
+    @cached_property
+    def posix_time_stragglers_count(self) -> int:
+        if self._posix_time_stragglers_count is None:
+            self._posix_time_stragglers_count = len(self.posix_time_stragglers_df)
+        return self._posix_time_stragglers_count
