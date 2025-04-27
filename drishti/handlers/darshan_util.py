@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from darshan import DarshanReport  # type: ignore
 import drishti.includes.parser as parser
+import drishti.includes.config as config
 
 
 class ModuleType(str, Enum):
@@ -271,6 +272,8 @@ class DarshanFile:
     _posix_write_sequential: Optional[int] = None
     _posix_read_random: Optional[int] = None
     _posix_write_random: Optional[int] = None
+
+    _posix_long_metadata_count: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
@@ -641,3 +644,11 @@ class DarshanFile:
             posix_counters = posix_df["counters"]
             self._posix_write_random = self.io_stats.get_module_ops(ModuleType.POSIX, "write") - self.posix_write_consecutive - self.posix_write_sequential
         return self._posix_write_random
+
+    @cached_property
+    def posix_long_metadata_count(self) -> int:
+        if self._posix_long_metadata_count is None:
+            posix_df = self.report.records[ModuleType.POSIX].to_df()
+            posix_long_metadata_rows = posix_df['fcounters'][(posix_df['fcounters']['POSIX_F_META_TIME'] > config.thresholds['metadata_time_rank'][0])]
+            self._posix_long_metadata_count = len(posix_long_metadata_rows)
+        return self._posix_long_metadata_count

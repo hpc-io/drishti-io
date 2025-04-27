@@ -530,6 +530,7 @@ def handler():
         shared_files = shared_files.assign(id=lambda d: d['id'].astype(str))
 
         if not shared_files.empty:
+            # TODO: This entire conditional
             total_shared_reads = shared_files['POSIX_READS'].sum()
             total_shared_reads_small = (
                 shared_files['POSIX_SIZE_READ_0_100'].sum() +
@@ -571,7 +572,10 @@ def handler():
 
         count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > thresholds['metadata_time_rank'][0])])
 
-        module.check_long_metadata(count_long_metadata, modules)
+        assert darshan_file_obj.posix_long_metadata_count == count_long_metadata
+        assert darshan_file_obj.modules == modules.keys(), f"{darshan_file_obj.modules} != {modules.keys()}"
+        # module.check_long_metadata(count_long_metadata, modules)
+        module.check_long_metadata(count_long_metadata=darshan_file_obj.posix_long_metadata_count, modules=darshan_file_obj.modules)
 
         # We already have a single line for each shared-file access
         # To check for stragglers, we can check the difference between the
