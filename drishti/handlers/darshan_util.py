@@ -31,11 +31,15 @@ class TimeSpan:
 
     def __post_init__(self):
         if self.start > self.end:
-            raise ValueError(f"TimeSpan start ({self.start}) must be <= end ({self.end})")
+            raise ValueError(
+                f"TimeSpan start ({self.start}) must be <= end ({self.end})"
+            )
+
 
 @dataclass
 class IOCounter:
     """Base class for I/O metrics with read/write counts"""
+
     read: Final[int] = field(init=True)
     write: Final[int] = field(init=True)
     _total: Optional[int] = None
@@ -47,20 +51,25 @@ class IOCounter:
             return self._total
         return self.read + self.write
 
+
 @dataclass
 class IOSize(IOCounter):
     """Represents I/O size statistics in bytes"""
+
     pass
+
 
 @dataclass
 class IOOperation(IOCounter):
     """Represents I/O operation count statistics"""
+
     pass
 
 
 @dataclass
 class IOStatistics:
     """Tracks both I/O sizes and operations by module with aggregated metrics"""
+
     # Use dicts to store module-specific data
     sizes: Dict[ModuleType, IOSize] = field(init=True)
     operations: Dict[ModuleType, IOOperation] = field(init=True)
@@ -69,7 +78,9 @@ class IOStatistics:
         # Initialize standard modules if not present
         for module in ModuleType:
             # Ensure that the module is either in both sizes and operations or in neither
-            assert (module in self.sizes) == (module in self.operations), f"Module {module} should be in both sizes and operations or in neither"
+            assert (module in self.sizes) == (module in self.operations), (
+                f"Module {module} should be in both sizes and operations or in neither"
+            )
 
             if module not in self.sizes:
                 self.sizes[module] = IOSize(read=0, write=0)
@@ -134,11 +145,15 @@ class IOStatistics:
         return self.reads + self.writes
 
     # Methods to get stats for specific modules
-    def get_module_size(self, module: Optional[Union[ModuleType, str]] = None, data_type: Optional[str] = "total") -> int:
+    def get_module_size(
+        self,
+        module: Optional[Union[ModuleType, str]] = None,
+        data_type: Optional[str] = "total",
+    ) -> int:
         """Get size statistics for a specific module or all modules if not specified."""
         if module is None and data_type is None:
             raise ValueError("Both module and data_type cannot be None")
-            
+
         if module:
             if module not in self.sizes:
                 raise ValueError(f"Module {module} not found in sizes")
@@ -157,11 +172,15 @@ class IOStatistics:
             else:  # data_type is None or "total"
                 return self.total_bytes
 
-    def get_module_ops(self, module: Optional[Union[ModuleType, str]] = None, data_type: Optional[str] = "total") -> int:
+    def get_module_ops(
+        self,
+        module: Optional[Union[ModuleType, str]] = None,
+        data_type: Optional[str] = "total",
+    ) -> int:
         """Get operation statistics for a specific module or all modules if not specified."""
         if module is None and data_type is None:
             raise ValueError("Both module and data_type cannot be None")
-            
+
         if module:
             if module not in self.operations:
                 raise ValueError(f"Module {module} not found in operations")
@@ -180,57 +199,84 @@ class IOStatistics:
             else:  # data_type is None or "total"
                 return self.total_ops
 
+
 @dataclass
 class SmallIOStats(IOCounter):
     """Statistics for small I/O operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class SharedOpsStats(IOCounter):
     """Statistics for shared file operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class SharedSmallOpsStats(IOCounter):
     """Statistics for small shared file operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class ConsecutiveIOStats(IOCounter):
     """Statistics for consecutive I/O operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class SequentialIOStats(IOCounter):
     """Statistics for sequential I/O operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class RandomIOStats(IOCounter):
     """Statistics for random I/O operations"""
+
     pass  # Inherits read/write/total from IOCounter
+
 
 @dataclass
 class MPIIONonBlockingStats(IOCounter):
     """Statistics for non-blocking MPI I/O operations"""
+
     pass
+
 
 @dataclass
 class MPICollectiveIOStats(IOCounter):
     """Statistics for collective MPI I/O operations"""
+
     pass
+
 
 @dataclass
 class MPIIndependentIOStats(IOCounter):
     """Statistics for independent MPI I/O operations"""
+
     pass
+
 
 @dataclass
 class AccessPatternStats:
     """Statistics for I/O access patterns by pattern type"""
-    consecutive: ConsecutiveIOStats = field(default_factory=lambda: ConsecutiveIOStats(read=0, write=0), init=True)
-    sequential: SequentialIOStats = field(default_factory=lambda: SequentialIOStats(read=0, write=0), init=True)
-    random: RandomIOStats = field(default_factory=lambda: RandomIOStats(read=0, write=0), init=True)
+
+    consecutive: ConsecutiveIOStats = field(
+        default_factory=lambda: ConsecutiveIOStats(read=0, write=0), init=True
+    )
+    sequential: SequentialIOStats = field(
+        default_factory=lambda: SequentialIOStats(read=0, write=0), init=True
+    )
+    random: RandomIOStats = field(
+        default_factory=lambda: RandomIOStats(read=0, write=0), init=True
+    )
+
 
 @dataclass
 class DarshanFile:
@@ -250,13 +296,13 @@ class DarshanFile:
     total_files_posix: Optional[int] = None
     total_files_mpiio: Optional[int] = None
     files: Optional[Dict[str, str]] = None
-    
+
     # Replace individual I/O stats with IOStatistics class
     _io_stats: Optional[IOStatistics] = None
 
     # File counts
     total_files: Optional[int] = 0
-    
+
     # Additional I/O statistics organized by category
     _posix_small_io: Optional[SmallIOStats] = None
 
@@ -304,7 +350,9 @@ class DarshanFile:
     detected_files_mpi_coll_writes: Optional[pd.DataFrame] = None
 
     imbalance_count_posix_shared_time: Optional[int] = None
-    posix_shared_time_imbalance_detected_files: Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]] = None
+    posix_shared_time_imbalance_detected_files: Optional[
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+    ] = None
 
     @cached_property
     def report(self) -> DarshanReport:
@@ -527,36 +575,45 @@ class DarshanFile:
         write_start_time = []
         write_operation = []
 
-        for r in zip(df['rank'], df['read_segments'], df['write_segments'], df['id']):
+        for r in zip(df["rank"], df["read_segments"], df["write_segments"], df["id"]):
             if not r[2].empty:
-                write_id.append([r[3]] * len((r[2]['length'].to_list())))
-                write_rank.append([r[0]] * len((r[2]['length'].to_list())))
-                write_length.append(r[2]['length'].to_list())
-                write_end_time.append(r[2]['end_time'].to_list())
-                write_start_time.append(r[2]['start_time'].to_list())
-                write_operation.append(['write'] * len((r[2]['length'].to_list())))
-                write_offsets.append(r[2]['offset'].to_list())
-
+                write_id.append([r[3]] * len((r[2]["length"].to_list())))
+                write_rank.append([r[0]] * len((r[2]["length"].to_list())))
+                write_length.append(r[2]["length"].to_list())
+                write_end_time.append(r[2]["end_time"].to_list())
+                write_start_time.append(r[2]["start_time"].to_list())
+                write_operation.append(["write"] * len((r[2]["length"].to_list())))
+                write_offsets.append(r[2]["offset"].to_list())
 
         write_id = [element for nestedlist in write_id for element in nestedlist]
         write_rank = [element for nestedlist in write_rank for element in nestedlist]
-        write_length = [element for nestedlist in write_length for element in nestedlist]
-        write_offsets = [element for nestedlist in write_offsets for element in nestedlist]
-        write_end_time = [element for nestedlist in write_end_time for element in nestedlist]
-        write_operation = [element for nestedlist in write_operation for element in nestedlist]
-        write_start_time = [element for nestedlist in write_start_time for element in nestedlist]
-
+        write_length = [
+            element for nestedlist in write_length for element in nestedlist
+        ]
+        write_offsets = [
+            element for nestedlist in write_offsets for element in nestedlist
+        ]
+        write_end_time = [
+            element for nestedlist in write_end_time for element in nestedlist
+        ]
+        write_operation = [
+            element for nestedlist in write_operation for element in nestedlist
+        ]
+        write_start_time = [
+            element for nestedlist in write_start_time for element in nestedlist
+        ]
 
         dxt_posix_write_data = pd.DataFrame(
             {
-                'id': write_id,
-                'rank': write_rank,
-                'length': write_length,
-                'end_time': write_end_time,
-                'start_time': write_start_time,
-                'operation': write_operation,
-                'offsets': write_offsets,
-            })
+                "id": write_id,
+                "rank": write_rank,
+                "length": write_length,
+                "end_time": write_end_time,
+                "start_time": write_start_time,
+                "operation": write_operation,
+                "offsets": write_offsets,
+            }
+        )
 
         return pd.DataFrame(dxt_posix_write_data)
 
@@ -565,7 +622,7 @@ class DarshanFile:
         if self._mem_not_aligned is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._mem_not_aligned = posix_counters['POSIX_MEM_NOT_ALIGNED'].sum()
+            self._mem_not_aligned = posix_counters["POSIX_MEM_NOT_ALIGNED"].sum()
         return self._mem_not_aligned
 
     @cached_property
@@ -573,7 +630,7 @@ class DarshanFile:
         if self._file_not_aligned is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._file_not_aligned = posix_counters['POSIX_FILE_NOT_ALIGNED'].sum()
+            self._file_not_aligned = posix_counters["POSIX_FILE_NOT_ALIGNED"].sum()
         return self._file_not_aligned
 
     @property
@@ -587,7 +644,7 @@ class DarshanFile:
         if self._max_read_offset is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._max_read_offset = posix_counters['POSIX_MAX_BYTE_READ'].max()
+            self._max_read_offset = posix_counters["POSIX_MAX_BYTE_READ"].max()
         return self._max_read_offset
 
     @cached_property
@@ -595,7 +652,7 @@ class DarshanFile:
         if self._max_write_offset is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._max_write_offset = posix_counters['POSIX_MAX_BYTE_WRITTEN'].max()
+            self._max_write_offset = posix_counters["POSIX_MAX_BYTE_WRITTEN"].max()
         return self._max_write_offset
 
     @cached_property
@@ -603,7 +660,7 @@ class DarshanFile:
         if self._posix_read_consecutive is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_read_consecutive = posix_counters['POSIX_CONSEC_READS'].sum()
+            self._posix_read_consecutive = posix_counters["POSIX_CONSEC_READS"].sum()
         return self._posix_read_consecutive
 
     @cached_property
@@ -611,7 +668,7 @@ class DarshanFile:
         if self._posix_write_consecutive is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_write_consecutive = posix_counters['POSIX_CONSEC_WRITES'].sum()
+            self._posix_write_consecutive = posix_counters["POSIX_CONSEC_WRITES"].sum()
         return self._posix_write_consecutive
 
     @cached_property
@@ -619,7 +676,9 @@ class DarshanFile:
         if self._posix_read_sequential is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_read_sequential = posix_counters['POSIX_SEQ_READS'].sum() - self.posix_read_consecutive
+            self._posix_read_sequential = (
+                posix_counters["POSIX_SEQ_READS"].sum() - self.posix_read_consecutive
+            )
         return self._posix_read_sequential
 
     @cached_property
@@ -627,7 +686,9 @@ class DarshanFile:
         if self._posix_write_sequential is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_write_sequential = posix_counters['POSIX_SEQ_WRITES'].sum() - self.posix_write_consecutive
+            self._posix_write_sequential = (
+                posix_counters["POSIX_SEQ_WRITES"].sum() - self.posix_write_consecutive
+            )
         return self._posix_write_sequential
 
     @cached_property
@@ -635,7 +696,11 @@ class DarshanFile:
         if self._posix_read_random is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_read_random = self.io_stats.get_module_ops(ModuleType.POSIX, "read") - self.posix_read_consecutive - self.posix_read_sequential
+            self._posix_read_random = (
+                self.io_stats.get_module_ops(ModuleType.POSIX, "read")
+                - self.posix_read_consecutive
+                - self.posix_read_sequential
+            )
         return self._posix_read_random
 
     @cached_property
@@ -643,15 +708,19 @@ class DarshanFile:
         if self._posix_write_random is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
             posix_counters = posix_df["counters"]
-            self._posix_write_random = self.io_stats.get_module_ops(ModuleType.POSIX, "write") - self.posix_write_consecutive - self.posix_write_sequential
+            self._posix_write_random = (
+                self.io_stats.get_module_ops(ModuleType.POSIX, "write")
+                - self.posix_write_consecutive
+                - self.posix_write_sequential
+            )
         return self._posix_write_random
 
     @property
     def posix_shared_files_df(self) -> pd.DataFrame:
         assert "POSIX" in self.modules, "Missing POSIX module"
         posix_df = self.report.records[ModuleType.POSIX].to_df()
-        shared_files_df = posix_df['counters'].loc[(posix_df['counters']['rank'] == -1)]
-        shared_files_df = shared_files_df.assign(id=lambda d: d['id'].astype(str))
+        shared_files_df = posix_df["counters"].loc[(posix_df["counters"]["rank"] == -1)]
+        shared_files_df = shared_files_df.assign(id=lambda d: d["id"].astype(str))
         return shared_files_df
 
     @cached_property
@@ -680,7 +749,12 @@ class DarshanFile:
     def posix_long_metadata_count(self) -> int:
         if self._posix_long_metadata_count is None:
             posix_df = self.report.records[ModuleType.POSIX].to_df()
-            posix_long_metadata_rows = posix_df['fcounters'][(posix_df['fcounters']['POSIX_F_META_TIME'] > config.thresholds['metadata_time_rank'][0])]
+            posix_long_metadata_rows = posix_df["fcounters"][
+                (
+                    posix_df["fcounters"]["POSIX_F_META_TIME"]
+                    > config.thresholds["metadata_time_rank"][0]
+                )
+            ]
             self._posix_long_metadata_count = len(posix_long_metadata_rows)
         return self._posix_long_metadata_count
 
@@ -691,21 +765,33 @@ class DarshanFile:
         detected_files = []
 
         for index, row in shared_files.iterrows():
-            total_transfer_size = row['POSIX_BYTES_WRITTEN'] + row['POSIX_BYTES_READ']
+            total_transfer_size = row["POSIX_BYTES_WRITTEN"] + row["POSIX_BYTES_READ"]
 
-            if total_transfer_size and abs(
-                    row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size > \
-                    config.thresholds['imbalance_stragglers'][0]:
+            if (
+                total_transfer_size
+                and abs(
+                    row["POSIX_SLOWEST_RANK_BYTES"] - row["POSIX_FASTEST_RANK_BYTES"]
+                )
+                / total_transfer_size
+                > config.thresholds["imbalance_stragglers"][0]
+            ):
                 # stragglers_count += 1
 
-                detected_files.append([
-                    row['id'],
-                    abs(row['POSIX_SLOWEST_RANK_BYTES'] - row['POSIX_FASTEST_RANK_BYTES']) / total_transfer_size * 100
-                ])
+                detected_files.append(
+                    [
+                        row["id"],
+                        abs(
+                            row["POSIX_SLOWEST_RANK_BYTES"]
+                            - row["POSIX_FASTEST_RANK_BYTES"]
+                        )
+                        / total_transfer_size
+                        * 100,
+                    ]
+                )
 
-        column_names = ['id', 'data_imbalance']
+        column_names = ["id", "data_imbalance"]
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        return  detected_files
+        return detected_files
 
     @cached_property
     def posix_stragglers_count(self) -> int:
