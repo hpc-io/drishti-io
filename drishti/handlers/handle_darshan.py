@@ -659,7 +659,6 @@ def handler():
             detected_files=darshan_file_obj.posix_time_stragglers_df,
             file_map=darshan_file_obj.file_map,
         )
-        sys.exit(2)
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
@@ -688,7 +687,23 @@ def handler():
 
         column_names = ['id', 'write_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        module.check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
+
+        assert imbalance_count == darshan_file_obj.posix_write_imbalance_count, f"{imbalance_count} != {darshan_file_obj.posix_write_imbalance_count}"
+        assert detected_files.equals(darshan_file_obj.posix_write_imbalance_df), f"{detected_files} != {darshan_file_obj.posix_write_imbalance_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        assert dxt_posix == darshan_file_obj.dxt_posix_df, f"{dxt_posix} != {darshan_file_obj.dxt_posix_df}"
+        assert dxt_posix_read_data == darshan_file_obj.dxt_posix_read_df, f"{dxt_posix_read_data} != {darshan_file_obj.dxt_posix_read_df}"
+        assert dxt_posix_write_data == darshan_file_obj.dxt_posix_write_df, f"{dxt_posix_write_data} != {darshan_file_obj.dxt_posix_write_df}"
+
+        # module.check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
+        module.check_individual_write_imbalance(
+            imbalance_count=darshan_file_obj.posix_write_imbalance_count,
+            detected_files=darshan_file_obj.posix_write_imbalance_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df
+        )
+        sys.exit(2)
 
         imbalance_count = 0
 
