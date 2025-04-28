@@ -770,7 +770,11 @@ def handler():
         assert mpiio_coll_reads == darshan_file_obj.mpi_coll_ops.read, f"{mpiio_coll_reads} != {darshan_file_obj.mpi_coll_ops.read}"
         assert mpiio_indep_reads == darshan_file_obj.mpi_indep_ops.read, f"{mpiio_indep_reads} != {darshan_file_obj.mpi_indep_ops.read}"
         assert total_mpiio_read_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"), f"{total_mpiio_read_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read")}"
-        assert detected_files.equals(darshan_file_obj.mpi_read_df), f"{detected_files} != {darshan_file_obj.mpi_read_df}"
+        if detected_files.empty:
+            assert detected_files.empty, f"{detected_files} != {darshan_file_obj.mpi_read_df}"
+            assert darshan_file_obj.mpi_read_df.empty, f"{darshan_file_obj.mpi_read_df} != {detected_files}"
+        else:
+            assert detected_files.equals(darshan_file_obj.mpi_read_df), f"{detected_files} != {darshan_file_obj.mpi_read_df}"
         assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
         if dxt_mpiio is None:
             assert dxt_mpiio is None, f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
@@ -787,7 +791,6 @@ def handler():
             file_map=darshan_file_obj.file_map,
             dxt_mpiio=darshan_file_obj.dxt_mpi_df
         )
-        sys.exit(2)
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
@@ -812,7 +815,31 @@ def handler():
         column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        module.check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        assert mpiio_indep_writes == darshan_file_obj.mpi_indep_ops.write, f"{mpiio_indep_writes} != {darshan_file_obj.mpi_indep_ops.write}"
+        assert mpiio_coll_writes == darshan_file_obj.mpi_coll_ops.write, f"{mpiio_coll_writes} != {darshan_file_obj.mpi_coll_ops.write}"
+        assert total_mpiio_write_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"), f"{total_mpiio_write_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write")}"
+        if detected_files.empty:
+            assert detected_files.empty, f"{detected_files} !={darshan_file_obj.mpi_write_df}"
+            assert darshan_file_obj.mpi_write_df.empty, f"{darshan_file_obj.mpi_write_df} != {detected_files}"
+        else:
+            assert detected_files.equals(darshan_file_obj.mpi_write_df), f"{detected_files} != {darshan_file_obj.mpi_write_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        if dxt_mpiio is None:
+            assert dxt_mpiio is None, f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+            assert darshan_file_obj.dxt_mpi_df is None, f"{darshan_file_obj.dxt_mpi_df} != {dxt_mpiio}"
+        else:
+            assert dxt_mpiio.equals(darshan_file_obj.dxt_mpi_df), f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+
+        # module.check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_write_operation(
+            mpiio_coll_writes=darshan_file_obj.mpi_coll_ops.write,
+            mpiio_indep_writes=darshan_file_obj.mpi_indep_ops.write,
+            total_mpiio_write_operations=darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"),
+            detected_files=darshan_file_obj.mpi_write_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_mpiio=darshan_file_obj.dxt_mpi_df,
+        )
+        sys.exit(2)
 
         #########################################################################################################################################################################
 

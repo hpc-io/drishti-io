@@ -980,3 +980,33 @@ class DarshanFile:
         dxt_mpiio = self.report.records["DXT_MPIIO"].to_df()
         dxt_mpiio = pd.DataFrame(dxt_mpiio)
         return dxt_mpiio
+
+    @property
+    def mpi_write_df(self) -> pd.DataFrame:
+        mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+        counters = mpi_df['counters']
+
+        mpi_coll_writes = self.mpi_coll_ops.write
+        total_mpiio_write_operations = self.io_stats.get_module_ops(ModuleType.MPIIO, "write")
+
+
+        detected_files = []
+        if mpi_coll_writes == 0 and total_mpiio_write_operations and total_mpiio_write_operations > \
+                config.thresholds['collective_operations_absolute'][0]:
+            files = pd.DataFrame(counters.groupby('id').sum()).reset_index()
+
+            for index, row in counters.iterrows():
+                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
+                        row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        config.thresholds['collective_operations'][0] and
+                        (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        config.thresholds['collective_operations_absolute'][0]):
+                    detected_files.append([
+                        row['id'], row['MPIIO_INDEP_WRITES'],
+                        row['MPIIO_INDEP_WRITES'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                    ])
+
+        column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+
+        return detected_files
