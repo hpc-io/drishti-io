@@ -323,6 +323,7 @@ class DarshanFile:
     _posix_data_stragglers_count: Optional[int] = None
     _posix_time_stragglers_count: Optional[int] = None
     _posix_write_imbalance_count: Optional[int] = None
+    _posix_read_imbalance_count: Optional[int] = None
 
     access_pattern: Optional[AccessPatternStats] = None
 
@@ -880,3 +881,45 @@ class DarshanFile:
         if self._posix_write_imbalance_count is None:
             self._posix_write_imbalance_count = len(self.posix_write_imbalance_df)
         return self._posix_write_imbalance_count
+
+    @property
+    def posix_read_imbalance_df(self) -> pd.DataFrame:
+        df = self.report.records[ModuleType.POSIX].to_df()
+
+        aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
+            ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
+        ].groupby('id', as_index=False).agg({
+            'rank': 'nunique',
+            'POSIX_BYTES_WRITTEN': ['sum', 'min', 'max'],
+            'POSIX_BYTES_READ': ['sum', 'min', 'max']
+        })
+
+        aggregated.columns = list(map('_'.join, aggregated.columns.values))
+
+        aggregated = aggregated.assign(id=lambda d: d['id_'].astype(str))
+
+
+        imbalance_count = 0
+
+        detected_files = []
+
+        for index, row in aggregated.iterrows():
+            if row['POSIX_BYTES_READ_max'] and abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row[
+                'POSIX_BYTES_READ_max'] > config.thresholds['imbalance_size'][0]:
+                imbalance_count += 1
+
+                detected_files.append([
+                    row['id'],
+                    abs(row['POSIX_BYTES_READ_max'] - row['POSIX_BYTES_READ_min']) / row['POSIX_BYTES_READ_max'] * 100
+                ])
+
+        column_names = ['id', 'read_imbalance']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+
+        return detected_files
+
+    @cached_property
+    def posix_read_imbalance_count(self) -> int:
+        if self._posix_read_imbalance_count is None:
+            self._posix_read_imbalance_count = len(self.posix_read_imbalance_df)
+        return self._posix_read_imbalance_count
