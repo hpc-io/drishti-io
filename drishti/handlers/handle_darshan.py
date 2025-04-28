@@ -733,7 +733,6 @@ def handler():
             dxt_posix=darshan_file_obj.dxt_posix_df,
             dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df
         )
-        sys.exit(2)
 
     #########################################################################################################################################################################
 
@@ -768,7 +767,27 @@ def handler():
         column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        module.check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        assert mpiio_coll_reads == darshan_file_obj.mpi_coll_ops.read, f"{mpiio_coll_reads} != {darshan_file_obj.mpi_coll_ops.read}"
+        assert mpiio_indep_reads == darshan_file_obj.mpi_indep_ops.read, f"{mpiio_indep_reads} != {darshan_file_obj.mpi_indep_ops.read}"
+        assert total_mpiio_read_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"), f"{total_mpiio_read_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read")}"
+        assert detected_files.equals(darshan_file_obj.mpi_read_df), f"{detected_files} != {darshan_file_obj.mpi_read_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        if dxt_mpiio is None:
+            assert dxt_mpiio is None, f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+            assert darshan_file_obj.dxt_mpi_df is None, f"{darshan_file_obj.dxt_mpi_df} != {dxt_mpiio}"
+        else:
+            assert dxt_mpiio.equals(darshan_file_obj.dxt_mpi_df), f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+
+        # module.check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_read_operation(
+            mpiio_coll_reads=darshan_file_obj.mpi_coll_ops.read,
+            mpiio_indep_reads=darshan_file_obj.mpi_indep_ops.read,
+            total_mpiio_read_operations=darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"),
+            detected_files=darshan_file_obj.mpi_read_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_mpiio=darshan_file_obj.dxt_mpi_df
+        )
+        sys.exit(2)
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 

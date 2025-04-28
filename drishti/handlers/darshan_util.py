@@ -346,8 +346,8 @@ class DarshanFile:
 
     aggregated: Optional[pd.DataFrame] = None
 
-    mpi_coll_ops: Optional[MPICollectiveIOStats] = None
-    mpi_indep_ops: Optional[MPIIndependentIOStats] = None
+    _mpi_coll_ops: Optional[MPICollectiveIOStats] = None
+    _mpi_indep_ops: Optional[MPIIndependentIOStats] = None
 
     detected_files_mpi_coll_reads: Optional[pd.DataFrame] = None
     detected_files_mpi_coll_writes: Optional[pd.DataFrame] = None
@@ -923,3 +923,60 @@ class DarshanFile:
         if self._posix_read_imbalance_count is None:
             self._posix_read_imbalance_count = len(self.posix_read_imbalance_df)
         return self._posix_read_imbalance_count
+
+    @cached_property
+    def mpi_coll_ops(self) -> MPICollectiveIOStats:
+        if self._mpi_coll_ops is None:
+            mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+            mpi_coll_reads = mpi_df['counters']['MPIIO_COLL_READS'].sum()
+            mpiio_coll_writes = mpi_df['counters']['MPIIO_COLL_WRITES'].sum()
+            self._mpi_coll_ops = MPICollectiveIOStats(read=mpi_coll_reads, write=mpiio_coll_writes)
+        return self._mpi_coll_ops
+
+    @cached_property
+    def mpi_indep_ops(self) -> MPIIndependentIOStats:
+        if self._mpi_indep_ops is None:
+            mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+            mpi_indep_reads = mpi_df['counters']['MPIIO_INDEP_READS'].sum()
+            mpi_indep_writes = mpi_df['counters']['MPIIO_INDEP_WRITES'].sum()
+            self._mpi_indep_ops = MPIIndependentIOStats(read=mpi_indep_reads, write=mpi_indep_writes)
+        return self._mpi_indep_ops
+
+    @property
+    def mpi_read_df(self) -> pd.DataFrame:
+        mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+        counters = mpi_df['counters']
+        mpi_coll_reads = self.mpi_coll_ops.read
+        mpi_total_reads = self.io_stats.get_module_ops(ModuleType.MPIIO, "read")
+
+        detected_files = []
+
+        if mpi_coll_reads == 0 and mpi_total_reads and mpi_total_reads > \
+                config.thresholds['collective_operations_absolute'][0]:
+            files = pd.DataFrame(counters.groupby('id').sum()).reset_index()
+            for index, row in counters.iterrows():
+                if ((row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) and
+                        row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        config.thresholds['collective_operations'][0] and
+                        (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) >
+                        config.thresholds['collective_operations_absolute'][0]):
+                    detected_files.append([
+                        row['id'], row['MPIIO_INDEP_READS'],
+                        row['MPIIO_INDEP_READS'] / (row['MPIIO_INDEP_READS'] + row['MPIIO_INDEP_WRITES']) * 100
+                    ])
+
+        column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
+        detected_files = pd.DataFrame(detected_files, columns=column_names)
+
+        return detected_files
+
+    @property
+    def dxt_mpi_df(self) -> Optional[pd.DataFrame]:
+        if not parser.args.backtrace:
+            return None
+        if "DXT_MPIIO" not in self.modules:
+            return None
+
+        dxt_mpiio = self.report.records["DXT_MPIIO"].to_df()
+        dxt_mpiio = pd.DataFrame(dxt_mpiio)
+        return dxt_mpiio
