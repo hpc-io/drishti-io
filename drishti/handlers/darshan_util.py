@@ -420,8 +420,8 @@ class DarshanFile:
                     read=mpiio_read_size, write=mpiio_write_size
                 )
 
-                mpiio_read_ops = -1
-                mpiio_write_ops = -1
+                mpiio_read_ops = counters['MPIIO_INDEP_READS'].sum() + counters['MPIIO_COLL_READS'].sum()
+                mpiio_write_ops = counters['MPIIO_INDEP_WRITES'].sum() + counters['MPIIO_COLL_WRITES'].sum()
                 ops[ModuleType.MPIIO] = IOOperation(
                     read=mpiio_read_ops, write=mpiio_write_ops
                 )
