@@ -839,7 +839,6 @@ def handler():
             file_map=darshan_file_obj.file_map,
             dxt_mpiio=darshan_file_obj.dxt_mpi_df,
         )
-        sys.exit(2)
 
         #########################################################################################################################################################################
 
@@ -856,7 +855,19 @@ def handler():
         mpiio_nb_reads = df_mpiio['counters']['MPIIO_NB_READS'].sum()
         mpiio_nb_writes = df_mpiio['counters']['MPIIO_NB_WRITES'].sum()
 
-        module.check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
+        assert mpiio_nb_reads == darshan_file_obj.mpiio_nb_ops.read
+        assert mpiio_nb_writes == darshan_file_obj.mpiio_nb_ops.write
+        assert modules.keys() == darshan_file_obj.modules, f"{modules.keys()} != {darshan_file_obj.modules}"
+        assert has_hdf5_extension == darshan_file_obj.has_hdf5_extension, f"{has_hdf5_extension} != {darshan_file_obj.has_hdf5_extension}"
+
+        # module.check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
+        module.check_mpi_none_block_operation(
+            mpiio_nb_reads=darshan_file_obj.mpiio_nb_ops.read,
+            mpiio_nb_writes=darshan_file_obj.mpiio_nb_ops.write,
+            has_hdf5_extension=darshan_file_obj.has_hdf5_extension,
+            modules=darshan_file_obj.modules,
+        )
+        sys.exit(2)
 
     #########################################################################################################################################################################
 

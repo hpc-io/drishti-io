@@ -334,9 +334,9 @@ class DarshanFile:
     count_long_metadata: Optional[int] = None
     posix_shared_data_imbalance_stragglers_count: Optional[int] = None
 
-    has_hdf5_extension: Optional[bool] = None
+    _has_hdf5_extension: Optional[bool] = None
 
-    mpiio_nb_ops: Optional[MPIIONonBlockingStats] = None
+    _mpiio_nb_ops: Optional[MPIIONonBlockingStats] = None
 
     cb_nodes: Optional[int] = None
     number_of_compute_nodes: Optional[int] = None
@@ -1010,3 +1010,23 @@ class DarshanFile:
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
         return detected_files
+
+    @cached_property
+    def mpiio_nb_ops(self) -> MPIIONonBlockingStats:
+        if self._mpiio_nb_ops is None:
+            mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+            mpi_nb_reads = mpi_df['counters']['MPIIO_NB_READS'].sum()
+            mpi_nb_writes = mpi_df['counters']['MPIIO_NB_WRITES'].sum()
+            self._mpiio_nb_ops = MPIIONonBlockingStats(read=mpi_nb_reads, write=mpi_nb_writes)
+        return self._mpiio_nb_ops
+
+    @cached_property
+    def has_hdf5_extension(self) -> bool:
+        if self._has_hdf5_extension is None:
+            self._has_hdf5_extension = False
+            mpi_df = self.report.records[ModuleType.MPIIO].to_df()
+            for index, row in mpi_df['counters'].iterrows():
+                if self.file_map[int(row['id'])].endswith('.h5') or self.file_map[int(row['id'])].endswith('.hdf5'):
+                    self._has_hdf5_extension = True
+                    # break
+        return self._has_hdf5_extension
