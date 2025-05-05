@@ -645,7 +645,10 @@ class DarshanFile:
     def lustre_df(self) -> Optional[pd.DataFrame]:
         if "LUSTRE" not in self.modules:
             return None
-        return pd.DataFrame(self.report.records["LUSTRE"].to_df())
+        lustre_dict = self.report.records["LUSTRE"].to_df()
+        assert len(lustre_dict) == 1, f"Expected 1 data frame for LUSTRE, got {len(self.report.records['LUSTRE'].to_df())}"
+        lustre_df = lustre_dict["components"]
+        return lustre_df
 
     @cached_property
     def max_read_offset(self) -> int:
