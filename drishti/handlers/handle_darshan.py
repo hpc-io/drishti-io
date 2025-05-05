@@ -500,7 +500,7 @@ def handler():
         assert read_consecutive == darshan_file_obj.posix_read_consecutive
         assert read_sequential == darshan_file_obj.posix_read_sequential
         assert read_random == darshan_file_obj.posix_read_random, f"{read_random} != {darshan_file_obj.posix_read_random}"
-        assert total_reads == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"), f"{total_reads} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read")}"
+        assert total_reads == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"), f"{total_reads} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, 'read')}"
         assert write_consecutive == darshan_file_obj.posix_write_consecutive
         assert write_sequential == darshan_file_obj.posix_write_sequential
         assert write_random == darshan_file_obj.posix_write_random
@@ -769,7 +769,7 @@ def handler():
 
         assert mpiio_coll_reads == darshan_file_obj.mpi_coll_ops.read, f"{mpiio_coll_reads} != {darshan_file_obj.mpi_coll_ops.read}"
         assert mpiio_indep_reads == darshan_file_obj.mpi_indep_ops.read, f"{mpiio_indep_reads} != {darshan_file_obj.mpi_indep_ops.read}"
-        assert total_mpiio_read_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"), f"{total_mpiio_read_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read")}"
+        assert total_mpiio_read_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"), f"{total_mpiio_read_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, 'read')}"
         if detected_files.empty:
             assert detected_files.empty, f"{detected_files} != {darshan_file_obj.mpi_read_df}"
             assert darshan_file_obj.mpi_read_df.empty, f"{darshan_file_obj.mpi_read_df} != {detected_files}"
@@ -817,7 +817,7 @@ def handler():
 
         assert mpiio_indep_writes == darshan_file_obj.mpi_indep_ops.write, f"{mpiio_indep_writes} != {darshan_file_obj.mpi_indep_ops.write}"
         assert mpiio_coll_writes == darshan_file_obj.mpi_coll_ops.write, f"{mpiio_coll_writes} != {darshan_file_obj.mpi_coll_ops.write}"
-        assert total_mpiio_write_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"), f"{total_mpiio_write_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write")}"
+        assert total_mpiio_write_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"), f"{total_mpiio_write_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, 'write')}"
         if detected_files.empty:
             assert detected_files.empty, f"{detected_files} !={darshan_file_obj.mpi_write_df}"
             assert darshan_file_obj.mpi_write_df.empty, f"{darshan_file_obj.mpi_write_df} != {detected_files}"
