@@ -1,9 +1,14 @@
+import csv
 import datetime
+import io
+import subprocess
+import sys
 import typing
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from os import write
+from shlex import shlex
 from typing import Dict, Final, Optional, Union, List, Tuple, Iterable
 
 import numpy as np
@@ -338,8 +343,8 @@ class DarshanFile:
 
     _mpiio_nb_ops: Optional[MPIIONonBlockingStats] = None
 
-    cb_nodes: Optional[int] = None
-    number_of_compute_nodes: Optional[int] = None
+    _cb_nodes: Optional[int] = None
+    _number_of_compute_nodes: Optional[int] = None
     hints: Optional[List[str]] = None
 
     timestamp: Optional[TimeSpan] = None
@@ -1030,3 +1035,51 @@ class DarshanFile:
                     self._has_hdf5_extension = True
                     # break
         return self._has_hdf5_extension
+
+    @cached_property
+    def cb_nodes(self) -> int:
+        if self._cb_nodes is None:
+            assert ModuleType.MPIIO in self.modules, "Missing MPIIO module"
+            hints = ""
+            if 'h' in self.report.metadata['job']['metadata']:
+                hints = self.report.metadata['job']['metadata']['h']
+            if hints:
+                hints = hints.split(';')
+
+            cb_nodes = None
+
+            for hint in hints:
+                if hint != 'no':
+                    (key, value) = hint.split('=')
+
+                if key == 'cb_nodes':
+                    cb_nodes = value
+        return self._cb_nodes
+
+    @cached_property
+    def number_of_compute_nodes(self) -> int:
+        if self._number_of_compute_nodes is None:
+            assert ModuleType.MPIIO in self.modules, "Missing MPIIO module"
+            command = 'sacct --job {} --format=JobID,JobIDRaw,NNodes,NCPUs --parsable2 --delimiter ","'.format(
+                self.report.metadata['job']['jobid']
+            )
+            arguments = shlex.split(command)
+
+            try:
+                result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+                if result.returncode == 0:
+                    # We have successfully fetched the information from SLURM
+                    db = csv.DictReader(io.StringIO(result.stdout.decode('utf-8')))
+
+                    try:
+                        first = next(db)
+
+                        if 'NNodes' in first:
+                            self._number_of_compute_nodes = first['NNodes']
+
+                    except StopIteration:
+                        pass
+            except FileNotFoundError:
+                pass
+        return self._number_of_compute_nodes

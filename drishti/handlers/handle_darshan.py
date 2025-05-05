@@ -867,7 +867,6 @@ def handler():
             has_hdf5_extension=darshan_file_obj.has_hdf5_extension,
             modules=darshan_file_obj.modules,
         )
-        sys.exit(2)
 
     #########################################################################################################################################################################
 
@@ -915,8 +914,14 @@ def handler():
                     if 'NNodes' in first:
                         NUMBER_OF_COMPUTE_NODES = first['NNodes']
 
+                        assert cb_nodes == darshan_file_obj.cb_nodes, f"{cb_nodes} != {darshan_file_obj.cb_nodes}"
+                        assert NUMBER_OF_COMPUTE_NODES == darshan_file_obj.number_of_compute_nodes, f"{NUMBER_OF_COMPUTE_NODES} != {darshan_file_obj.number_of_compute_nodes}"
                         # Do we have one MPI-IO aggregator per node?
-                        module.check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
+                        # module.check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
+                        module.check_mpi_aggregator(
+                            cb_nodes=darshan_file_obj.cb_nodes,
+                            NUMBER_OF_COMPUTE_NODES=darshan_file_obj.number_of_compute_nodes
+                        )
                 except StopIteration:
                     pass
         except FileNotFoundError:
