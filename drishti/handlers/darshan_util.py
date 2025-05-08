@@ -647,7 +647,11 @@ class DarshanFile:
             return None
         lustre_dict = self.report.records["LUSTRE"].to_df()
         assert len(lustre_dict) == 1, f"Expected 1 data frame for LUSTRE, got {len(self.report.records['LUSTRE'].to_df())}"
-        lustre_df = lustre_dict["components"]
+        try:
+            lustre_df = lustre_dict["components"]
+        except KeyError:
+            # Using an older PyDarshan version
+            lustre_df = lustre_dict["counters"]
         return lustre_df
 
     @cached_property
