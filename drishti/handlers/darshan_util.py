@@ -1037,10 +1037,12 @@ class DarshanFile:
         if self._has_hdf5_extension is None:
             self._has_hdf5_extension = False
             mpi_df = self.report.records[ModuleType.MPIIO].to_df()
-            for index, row in mpi_df['counters'].iterrows():
-                if self.file_map[int(row['id'])].endswith('.h5') or self.file_map[int(row['id'])].endswith('.hdf5'):
+            # for index, row in mpi_df['counters'].iterrows(): # Implicitly converts all data to np.float64. Problematic for id (np.uint64)
+            for row in mpi_df['counters'].itertuples(index=False):
+                # if self.file_map[int(row['id'])].endswith('.h5') or self.file_map[int(row['id'])].endswith('.hdf5'):
+                if self.file_map[row.id].endswith('.h5') or self.file_map[row.id].endswith('.hdf5'):
                     self._has_hdf5_extension = True
-                    # break
+                    break
         return self._has_hdf5_extension
 
     @cached_property
