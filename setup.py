@@ -23,6 +23,13 @@ setup(
         'rich==12.5.1',
         'recorder-utils',
     ],
+    extras_require={
+        'dev': [
+            'ruff',
+            'isort',
+            'mypy'
+        ],
+    },
     packages=find_packages(),
     package_data={
         'drishti.includes': [
