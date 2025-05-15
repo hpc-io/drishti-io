@@ -375,7 +375,7 @@ def handler():
 
         # module.check_size_intensive(total_size, total_read_size, total_written_size)
         module.check_size_intensive(
-            total_size=darshan_file_obj.io_stats.total_bytes,
+            total_size=darshan_file_obj.io_stats.posix_size,
             total_read_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "read"),
             total_written_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "write"),
         )
