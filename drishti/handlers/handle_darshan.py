@@ -1,18 +1,66 @@
 #!/usr/bin/env python3
 
+import csv
+import datetime
 import io
-import sys
-import time
+import os
 import shlex
 import shutil
 import subprocess
-import pandas as pd
-import darshan
-import darshan.backend.cffi_backend as darshanll
+import sys
+import time
 
-from rich import print
+import darshan  # type: ignore
+import darshan.backend.cffi_backend as darshanll  # type: ignore
+import numpy as np
+import pandas as pd
 from packaging import version
-from drishti.includes.module import *
+from rich import print
+from rich.padding import Padding
+from rich.panel import Panel
+
+from drishti.handlers.darshan_util import DarshanFile, ModuleType
+
+from drishti.includes.config import (
+    HIGH,
+    RECOMMENDATIONS,
+    WARN,
+    init_console,
+    insights_total,
+    thresholds,
+)
+
+# from drishti.includes.module import *
+import drishti.includes.module as module
+
+# from drishti.includes.module import (
+#     check_individual_read_imbalance,
+#     check_individual_write_imbalance,
+#     check_long_metadata,
+#     check_misaligned,
+#     check_mpi_aggregator,
+#     check_mpi_collective_read_operation,
+#     check_mpi_collective_write_operation,
+#     check_mpi_none_block_operation,
+#     check_mpiio,
+#     check_operation_intensive,
+#     check_random_operation,
+#     check_shared_data_imblance,
+#     check_shared_small_operation,
+#     check_shared_time_imbalance,
+#     check_size_intensive,
+#     check_small_operation,
+#     check_stdio,
+#     check_traffic,
+#     display_content,
+#     display_footer,
+#     display_thresholds,
+#     export_csv,
+#     export_html,
+#     export_svg,
+# )
+import drishti.includes.parser as parser
+# from drishti.includes.parser import args
 
 
 def is_available(name):
@@ -75,7 +123,8 @@ def handler():
 
     insights_start_time = time.time()
 
-    log = darshanll.log_open(args.log_path)
+    darshan_log_path = parser.args.log_paths[0]
+    log = darshanll.log_open(darshan_log_path)
 
     modules = darshanll.log_get_modules(log)
 
@@ -88,8 +137,8 @@ def handler():
     library_version = darshanll.get_lib_version()
 
     # Make sure log format is of the same version
-    filename = args.log_path
-    # check_log_version(console, args.log_path, log_version, library_version)
+    filename = darshan_log_path
+    # check_log_version(console, darshan_log_path, log_version, library_version)
  
     darshanll.log_close(log)
 
@@ -98,6 +147,9 @@ def handler():
     report = darshan.DarshanReport(filename)
 
     job = report.metadata
+
+    #########################################################################################################################################################################
+    darshan_file_obj = DarshanFile(file_path=darshan_log_path)
 
     #########################################################################################################################################################################
 
@@ -156,13 +208,12 @@ def handler():
     df_lustre = None
     if "LUSTRE" in report.records:
         df_lustre = report.records['LUSTRE'].to_df()
-    
-    if args.backtrace:
+    if parser.args.backtrace:
         if "DXT_POSIX" in report.records:
             dxt_posix = report.records["DXT_POSIX"].to_df()
             dxt_posix = pd.DataFrame(dxt_posix)
             if "address_line_mapping" not in dxt_posix:
-                args.backtrace = False
+                parser.args.backtrace = False
             else:
                 read_id = []
                 read_rank = []
@@ -290,8 +341,10 @@ def handler():
             'mpiio': uses_mpiio
         }
 
-    check_stdio(total_size, total_size_stdio)
-    check_mpiio(modules)
+    # module.check_stdio(total_size, total_size_stdio)
+    module.check_stdio(total_size=darshan_file_obj.io_stats.total_bytes, total_size_stdio=darshan_file_obj.io_stats.stdio_size)
+    # module.check_mpiio(modules)
+    module.check_mpiio(modules=darshan_file_obj.modules)
 
     #########################################################################################################################################################################
 
@@ -305,17 +358,27 @@ def handler():
         total_writes = df['counters']['POSIX_WRITES'].sum()
 
         # Get total number of I/O operations
-        total_operations = total_writes + total_reads 
+        total_operations = total_writes + total_reads
 
-        # To check whether the application is write-intersive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
-        check_operation_intensive(total_operations, total_reads, total_writes)
+        # To check whether the application is write-intensive or read-intensive we only look at the POSIX level and check if the difference between reads and writes is larger than 10% (for more or less), otherwise we assume a balance
+        # module.check_operation_intensive(total_operations, total_reads, total_writes)
+        module.check_operation_intensive(
+            total_operations=darshan_file_obj.io_stats.posix_ops,
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read"),
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "write"),
+        )
 
         total_read_size = df['counters']['POSIX_BYTES_READ'].sum()
         total_written_size = df['counters']['POSIX_BYTES_WRITTEN'].sum()
 
         total_size = total_written_size + total_read_size
 
-        check_size_intensive(total_size, total_read_size, total_written_size)
+        # module.check_size_intensive(total_size, total_read_size, total_written_size)
+        module.check_size_intensive(
+            total_size=darshan_file_obj.io_stats.posix_size,
+            total_read_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "read"),
+            total_written_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "write"),
+        )
 
         #########################################################################################################################################################################
 
@@ -359,7 +422,19 @@ def handler():
         detected_files.columns = ['id', 'total_reads', 'total_writes']
         detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
 
-        check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+
+        # module.check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_small_operation(
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "read"),
+            total_reads_small=darshan_file_obj.posix_small_io.read,
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, "write"),
+            total_writes_small=darshan_file_obj.posix_small_io.write,
+            detected_files=darshan_file_obj.posix_detected_small_files, modules=darshan_file_obj.modules,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -368,7 +443,17 @@ def handler():
         total_mem_not_aligned = df['counters']['POSIX_MEM_NOT_ALIGNED'].sum()
         total_file_not_aligned = df['counters']['POSIX_FILE_NOT_ALIGNED'].sum()
 
-        check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        # module.check_misaligned(total_operations, total_mem_not_aligned, total_file_not_aligned, modules, file_map, df_lustre, dxt_posix, dxt_posix_read_data)
+        module.check_misaligned(
+            total_operations=darshan_file_obj.io_stats.posix_ops,
+            total_mem_not_aligned=darshan_file_obj.mem_not_aligned,
+            total_file_not_aligned=darshan_file_obj.file_not_aligned,
+            modules=darshan_file_obj.modules,
+            file_map=darshan_file_obj.file_map,
+            df_lustre=darshan_file_obj.lustre_df,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -377,7 +462,16 @@ def handler():
         max_read_offset = df['counters']['POSIX_MAX_BYTE_READ'].max()
         max_write_offset = df['counters']['POSIX_MAX_BYTE_WRITTEN'].max()
 
-        check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        # module.check_traffic(max_read_offset, total_read_size, max_write_offset, total_written_size, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_traffic(
+            max_read_offset=darshan_file_obj.max_read_offset,
+            total_read_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "read"),
+            max_write_offset=darshan_file_obj.max_write_offset,
+            total_written_size=darshan_file_obj.io_stats.get_module_size(ModuleType.POSIX, "write"),
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -402,7 +496,30 @@ def handler():
         write_random = total_writes - write_consecutive - write_sequential
         #print('WRITE Random: {} ({:.2f}%)'.format(write_random, write_random / total_writes * 100))
 
-        check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+
+        assert read_consecutive == darshan_file_obj.posix_read_consecutive
+        assert read_sequential == darshan_file_obj.posix_read_sequential
+        assert read_random == darshan_file_obj.posix_read_random, f"{read_random} != {darshan_file_obj.posix_read_random}"
+        assert total_reads == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"), f"{total_reads} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX, 'read')}"
+        assert write_consecutive == darshan_file_obj.posix_write_consecutive
+        assert write_sequential == darshan_file_obj.posix_write_sequential
+        assert write_random == darshan_file_obj.posix_write_random
+        assert total_writes == darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"write")
+
+        # module.check_random_operation(read_consecutive, read_sequential, read_random, total_reads, write_consecutive, write_sequential, write_random, total_writes, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_random_operation(
+            read_consecutive=darshan_file_obj.posix_read_consecutive,
+            read_sequential=darshan_file_obj.posix_read_sequential,
+            read_random=darshan_file_obj.posix_read_random,
+            total_reads=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"read"),
+            write_consecutive=darshan_file_obj.posix_write_consecutive,
+            write_sequential=darshan_file_obj.posix_write_sequential,
+            write_random=darshan_file_obj.posix_write_random,
+            total_writes=darshan_file_obj.io_stats.get_module_ops(ModuleType.POSIX,"write"),
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -413,6 +530,7 @@ def handler():
         shared_files = shared_files.assign(id=lambda d: d['id'].astype(str))
 
         if not shared_files.empty:
+            # TODO: This entire conditional
             total_shared_reads = shared_files['POSIX_READS'].sum()
             total_shared_reads_small = (
                 shared_files['POSIX_SIZE_READ_0_100'].sum() +
@@ -448,16 +566,22 @@ def handler():
                 shared_files['POSIX_SIZE_WRITE_100K_1M']
             )
 
-            check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
+            # module.check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
+            assert total_shared_reads == darshan_file_obj.posix_shared_reads
+            sys.exit(2)
+            module.check_shared_small_operation(total_shared_reads, total_shared_reads_small, total_shared_writes, total_shared_writes_small, shared_files, file_map)
 
         #########################################################################################################################################################################
 
         count_long_metadata = len(df['fcounters'][(df['fcounters']['POSIX_F_META_TIME'] > thresholds['metadata_time_rank'][0])])
 
-        check_long_metadata(count_long_metadata, modules)
+        assert darshan_file_obj.posix_long_metadata_count == count_long_metadata
+        assert darshan_file_obj.modules == modules.keys(), f"{darshan_file_obj.modules} != {modules.keys()}"
+        # module.check_long_metadata(count_long_metadata, modules)
+        module.check_long_metadata(count_long_metadata=darshan_file_obj.posix_long_metadata_count, modules=darshan_file_obj.modules)
 
         # We already have a single line for each shared-file access
-        # To check for stragglers, we can check the difference between the 
+        # To check for stragglers, we can check the difference between the
 
         # POSIX_FASTEST_RANK_BYTES
         # POSIX_SLOWEST_RANK_BYTES
@@ -482,7 +606,21 @@ def handler():
 
         column_names = ['id', 'data_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        assert stragglers_count == darshan_file_obj.posix_data_stragglers_count, f"{stragglers_count} != {darshan_file_obj.posix_data_stragglers_count}"
+        assert detected_files.equals(darshan_file_obj.posix_data_stragglers_df), f"{detected_files} != {darshan_file_obj.posix_data_stragglers_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        assert dxt_posix == darshan_file_obj.dxt_posix_df, f"{dxt_posix} != {darshan_file_obj.dxt_posix_df}"
+        assert dxt_posix_read_data == darshan_file_obj.dxt_posix_read_df, f"{dxt_posix_read_data} != {darshan_file_obj.dxt_posix_read_df}"
+        assert dxt_posix_write_data == darshan_file_obj.dxt_posix_write_df, f"{dxt_posix_write_data} != {darshan_file_obj.dxt_posix_write_df}"
+        # module.check_shared_data_imblance(stragglers_count, detected_files, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
+        module.check_shared_data_imblance(
+            stragglers_count=darshan_file_obj.posix_data_stragglers_count,
+            detected_files=darshan_file_obj.posix_data_stragglers_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data = darshan_file_obj.dxt_posix_read_df,
+            dxt_posix_write_data = darshan_file_obj.dxt_posix_write_df
+        )
 
         # POSIX_F_FASTEST_RANK_TIME
         # POSIX_F_SLOWEST_RANK_TIME
@@ -494,7 +632,7 @@ def handler():
         detected_files = []
 
         stragglers_count = 0
-        stragglers_imbalance = {}
+        # stragglers_imbalance = {}
 
         shared_files_times = shared_files_times.assign(id=lambda d: d['id'].astype(str))
 
@@ -510,7 +648,17 @@ def handler():
 
         column_names = ['id', 'time_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_shared_time_imbalance(stragglers_count, detected_files, file_map)
+
+        assert stragglers_count == darshan_file_obj.posix_time_stragglers_count, f"{stragglers_count} != {darshan_file_obj.posix_time_stragglers_count}"
+        assert detected_files.equals(darshan_file_obj.posix_time_stragglers_df), f"{detected_files} != {darshan_file_obj.posix_time_stragglers_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+
+        # module.check_shared_time_imbalance(stragglers_count, detected_files, file_map)
+        module.check_shared_time_imbalance(
+            stragglers_count=darshan_file_obj.posix_time_stragglers_count,
+            detected_files=darshan_file_obj.posix_time_stragglers_df,
+            file_map=darshan_file_obj.file_map,
+        )
 
         aggregated = df['counters'].loc[(df['counters']['rank'] != -1)][
             ['rank', 'id', 'POSIX_BYTES_WRITTEN', 'POSIX_BYTES_READ']
@@ -539,7 +687,22 @@ def handler():
 
         column_names = ['id', 'write_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
+
+        assert imbalance_count == darshan_file_obj.posix_write_imbalance_count, f"{imbalance_count} != {darshan_file_obj.posix_write_imbalance_count}"
+        assert detected_files.equals(darshan_file_obj.posix_write_imbalance_df), f"{detected_files} != {darshan_file_obj.posix_write_imbalance_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        assert dxt_posix == darshan_file_obj.dxt_posix_df, f"{dxt_posix} != {darshan_file_obj.dxt_posix_df}"
+        assert dxt_posix_read_data == darshan_file_obj.dxt_posix_read_df, f"{dxt_posix_read_data} != {darshan_file_obj.dxt_posix_read_df}"
+        assert dxt_posix_write_data == darshan_file_obj.dxt_posix_write_df, f"{dxt_posix_write_data} != {darshan_file_obj.dxt_posix_write_df}"
+
+        # module.check_individual_write_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_write_data)
+        module.check_individual_write_imbalance(
+            imbalance_count=darshan_file_obj.posix_write_imbalance_count,
+            detected_files=darshan_file_obj.posix_write_imbalance_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_write_data=darshan_file_obj.dxt_posix_write_df
+        )
 
         imbalance_count = 0
 
@@ -555,7 +718,21 @@ def handler():
 
         column_names = ['id', 'read_imbalance']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
-        check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data)
+
+        assert imbalance_count == darshan_file_obj.posix_read_imbalance_count, f"{imbalance_count} != {darshan_file_obj.posix_read_imbalance_count}"
+        assert detected_files.equals(darshan_file_obj.posix_read_imbalance_df), f"{detected_files} != {darshan_file_obj.posix_read_imbalance_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        assert dxt_posix == darshan_file_obj.dxt_posix_df, f"{dxt_posix} != {darshan_file_obj.dxt_posix_df}"
+        assert dxt_posix_read_data == darshan_file_obj.dxt_posix_read_df, f"{dxt_posix_read_data} != {darshan_file_obj.dxt_posix_read_df}"
+
+        # module.check_individual_read_imbalance(imbalance_count, detected_files, file_map, dxt_posix, dxt_posix_read_data)
+        module.check_individual_read_imbalance(
+            imbalance_count=darshan_file_obj.posix_read_imbalance_count,
+            detected_files=darshan_file_obj.posix_read_imbalance_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_posix=darshan_file_obj.dxt_posix_df,
+            dxt_posix_read_data=darshan_file_obj.dxt_posix_read_df
+        )
 
     #########################################################################################################################################################################
 
@@ -590,7 +767,30 @@ def handler():
         column_names = ['id', 'absolute_indep_reads', 'percent_indep_reads']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        assert mpiio_coll_reads == darshan_file_obj.mpi_coll_ops.read, f"{mpiio_coll_reads} != {darshan_file_obj.mpi_coll_ops.read}"
+        assert mpiio_indep_reads == darshan_file_obj.mpi_indep_ops.read, f"{mpiio_indep_reads} != {darshan_file_obj.mpi_indep_ops.read}"
+        assert total_mpiio_read_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"), f"{total_mpiio_read_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, 'read')}"
+        if detected_files.empty:
+            assert detected_files.empty, f"{detected_files} != {darshan_file_obj.mpi_read_df}"
+            assert darshan_file_obj.mpi_read_df.empty, f"{darshan_file_obj.mpi_read_df} != {detected_files}"
+        else:
+            assert detected_files.equals(darshan_file_obj.mpi_read_df), f"{detected_files} != {darshan_file_obj.mpi_read_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        if dxt_mpiio is None:
+            assert dxt_mpiio is None, f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+            assert darshan_file_obj.dxt_mpi_df is None, f"{darshan_file_obj.dxt_mpi_df} != {dxt_mpiio}"
+        else:
+            assert dxt_mpiio.equals(darshan_file_obj.dxt_mpi_df), f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+
+        # module.check_mpi_collective_read_operation(mpiio_coll_reads, mpiio_indep_reads, total_mpiio_read_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_read_operation(
+            mpiio_coll_reads=darshan_file_obj.mpi_coll_ops.read,
+            mpiio_indep_reads=darshan_file_obj.mpi_indep_ops.read,
+            total_mpiio_read_operations=darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "read"),
+            detected_files=darshan_file_obj.mpi_read_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_mpiio=darshan_file_obj.dxt_mpi_df
+        )
 
         df_mpiio_collective_writes = df_mpiio['counters']  #.loc[(df_mpiio['counters']['MPIIO_COLL_WRITES'] > 0)]
 
@@ -615,7 +815,30 @@ def handler():
         column_names = ['id', 'absolute_indep_writes', 'percent_indep_writes']
         detected_files = pd.DataFrame(detected_files, columns=column_names)
 
-        check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        assert mpiio_indep_writes == darshan_file_obj.mpi_indep_ops.write, f"{mpiio_indep_writes} != {darshan_file_obj.mpi_indep_ops.write}"
+        assert mpiio_coll_writes == darshan_file_obj.mpi_coll_ops.write, f"{mpiio_coll_writes} != {darshan_file_obj.mpi_coll_ops.write}"
+        assert total_mpiio_write_operations == darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"), f"{total_mpiio_write_operations} != {darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, 'write')}"
+        if detected_files.empty:
+            assert detected_files.empty, f"{detected_files} !={darshan_file_obj.mpi_write_df}"
+            assert darshan_file_obj.mpi_write_df.empty, f"{darshan_file_obj.mpi_write_df} != {detected_files}"
+        else:
+            assert detected_files.equals(darshan_file_obj.mpi_write_df), f"{detected_files} != {darshan_file_obj.mpi_write_df}"
+        assert file_map == darshan_file_obj.file_map, f"{file_map} != {darshan_file_obj.file_map}"
+        if dxt_mpiio is None:
+            assert dxt_mpiio is None, f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+            assert darshan_file_obj.dxt_mpi_df is None, f"{darshan_file_obj.dxt_mpi_df} != {dxt_mpiio}"
+        else:
+            assert dxt_mpiio.equals(darshan_file_obj.dxt_mpi_df), f"{dxt_mpiio} != {darshan_file_obj.dxt_mpi_df}"
+
+        # module.check_mpi_collective_write_operation(mpiio_coll_writes, mpiio_indep_writes, total_mpiio_write_operations, detected_files, file_map, dxt_mpiio)
+        module.check_mpi_collective_write_operation(
+            mpiio_coll_writes=darshan_file_obj.mpi_coll_ops.write,
+            mpiio_indep_writes=darshan_file_obj.mpi_indep_ops.write,
+            total_mpiio_write_operations=darshan_file_obj.io_stats.get_module_ops(ModuleType.MPIIO, "write"),
+            detected_files=darshan_file_obj.mpi_write_df,
+            file_map=darshan_file_obj.file_map,
+            dxt_mpiio=darshan_file_obj.dxt_mpi_df,
+        )
 
         #########################################################################################################################################################################
 
@@ -632,7 +855,18 @@ def handler():
         mpiio_nb_reads = df_mpiio['counters']['MPIIO_NB_READS'].sum()
         mpiio_nb_writes = df_mpiio['counters']['MPIIO_NB_WRITES'].sum()
 
-        check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
+        assert mpiio_nb_reads == darshan_file_obj.mpiio_nb_ops.read
+        assert mpiio_nb_writes == darshan_file_obj.mpiio_nb_ops.write
+        assert modules.keys() == darshan_file_obj.modules, f"{modules.keys()} != {darshan_file_obj.modules}"
+        assert has_hdf5_extension == darshan_file_obj.has_hdf5_extension, f"{has_hdf5_extension} != {darshan_file_obj.has_hdf5_extension}"
+
+        # module.check_mpi_none_block_operation(mpiio_nb_reads, mpiio_nb_writes, has_hdf5_extension, modules)
+        module.check_mpi_none_block_operation(
+            mpiio_nb_reads=darshan_file_obj.mpiio_nb_ops.read,
+            mpiio_nb_writes=darshan_file_obj.mpiio_nb_ops.write,
+            has_hdf5_extension=darshan_file_obj.has_hdf5_extension,
+            modules=darshan_file_obj.modules,
+        )
 
     #########################################################################################################################################################################
 
@@ -680,8 +914,14 @@ def handler():
                     if 'NNodes' in first:
                         NUMBER_OF_COMPUTE_NODES = first['NNodes']
 
+                        assert cb_nodes == darshan_file_obj.cb_nodes, f"{cb_nodes} != {darshan_file_obj.cb_nodes}"
+                        assert NUMBER_OF_COMPUTE_NODES == darshan_file_obj.number_of_compute_nodes, f"{NUMBER_OF_COMPUTE_NODES} != {darshan_file_obj.number_of_compute_nodes}"
                         # Do we have one MPI-IO aggregator per node?
-                        check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
+                        # module.check_mpi_aggregator(cb_nodes, NUMBER_OF_COMPUTE_NODES)
+                        module.check_mpi_aggregator(
+                            cb_nodes=darshan_file_obj.cb_nodes,
+                            NUMBER_OF_COMPUTE_NODES=darshan_file_obj.number_of_compute_nodes
+                        )
                 except StopIteration:
                     pass
         except FileNotFoundError:
@@ -711,7 +951,7 @@ def handler():
                     job['exe'].split()[0]
                 ),
                 ' [b]DARSHAN[/b]:        [white]{}[/white]'.format(
-                    os.path.basename(args.log_path)
+                    os.path.basename(darshan_log_path)
                 ),
                 ' [b]EXECUTION TIME[/b]: [white]{} to {} ({:.2f} hours)[/white]'.format(
                     job_start,
@@ -748,14 +988,14 @@ def handler():
 
     console.print()
 
-    display_content(console)
-    display_thresholds(console)
-    display_footer(console, insights_start_time, insights_end_time)
+    module.display_content(console)
+    module.display_thresholds(console)
+    module.display_footer(console, insights_start_time, insights_end_time)
 
     # Export to HTML, SVG, and CSV
-    trace_name = os.path.basename(args.log_path).replace('.darshan', '')
-    out_dir = args.export_dir if args.export_dir != "" else os.getcwd()
+    trace_name = os.path.basename(darshan_log_path).replace('.darshan', '')
+    out_dir = parser.args.export_dir if parser.args.export_dir != "" else os.getcwd()
 
-    export_html(console, out_dir, trace_name)
-    export_svg(console, out_dir, trace_name)
-    export_csv(out_dir, trace_name, job['job']['jobid'])
+    module.export_html(console, out_dir, trace_name)
+    module.export_svg(console, out_dir, trace_name)
+    module.export_csv(out_dir, trace_name, job['job']['jobid'])
