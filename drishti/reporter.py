@@ -20,6 +20,7 @@ reporter -> /handlers -> |- handler_recorder  -|   -|
 
 LOG_TYPE_DARSHAN = 0
 LOG_TYPE_RECORDER = 1
+LOG_TYPE_TAU = 2
 
 
 def clear():
@@ -35,11 +36,16 @@ def check_log_type(path):
             print('Unable to open .darshan file.')
             sys.exit(os.EX_NOINPUT)
         else: return LOG_TYPE_DARSHAN
-    else: # check whether is a valid recorder log
+    else: # check whether is a valid recorder log or tau log
         if not os.path.isdir(path):
-            print('Unable to open recorder folder.')
+            print('Unable to open the folder.')
             sys.exit(os.EX_NOINPUT)
-        else: return LOG_TYPE_RECORDER
+        else:
+            for file in os.listdir(path):
+                if file == 'traces.otf2':
+                    return LOG_TYPE_TAU
+                elif file == 'recorder.mt':
+                    return LOG_TYPE_RECORDER
 
 
 def main():
@@ -50,6 +56,9 @@ def main():
 
     elif log_type == LOG_TYPE_RECORDER:
         from drishti.handlers.handle_recorder import handler
+
+    elif log_type == LOG_TYPE_TAU:
+        from drishti.handlers.handle_tau import handler
     
     handler()
 
