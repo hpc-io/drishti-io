@@ -1,4 +1,4 @@
-darshan>=3.4.4.0
+darshan>=3.4
 pandas>=2
 rich>=12.5.1
 recorder-utils

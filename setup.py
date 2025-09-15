@@ -18,7 +18,7 @@ setup(
     url="https://github.com/hpc-io/drishti",
     install_requires=[
         'pandas>=2',
-        'darshan>=3.4.4.0',
+        'darshan>=3.4',
         'rich>=12.5.1',
         'recorder-utils',
     ],
