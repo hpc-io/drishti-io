@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 setup(
     name="drishti-io",
     keywords="drishti",
-    version="0.7",
+    version="0.8",
     author="Jean Luca Bez, Suren Byna",
     author_email="jlbez@lbl.gov, sbyna@lbl.gov",
     description="",
