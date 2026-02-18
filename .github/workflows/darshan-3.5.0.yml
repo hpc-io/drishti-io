@@ -1,0 +1,105 @@
+name: Drishti (Darshan 3.5.0)
+
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drishti:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade pip, setuptools, and wheel
+        if: matrix.python-version == '3.12'
+        run: python -m pip install --upgrade pip setuptools wheel
+
+      - name: Dependencies
+        run: |
+          git clone https://github.com/darshan-hpc/darshan.git
+
+      - name: Install macOS Dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install libtool autoconf automake
+
+      - name: Build Darshan
+        run: |
+          cd darshan
+          git checkout 3.5.0
+          bash prepare.sh
+          cd darshan-util
+          ./configure
+          make
+          sudo make install
+
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo ldconfig
+
+      - name: Install Drishti
+        run: |
+          python -m ensurepip --upgrade
+          pip install --upgrade setuptools
+          pip install darshan==3.5.0
+          pip install -r requirements.txt
+          pip install .
+
+      - name: Run Drishti (--help)
+        run: |
+          drishti -h
+
+      - name: Run Drishti (--issues)
+        run: |
+          drishti --issues sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run Drishti (--code)
+        run: |
+           drishti --code sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--verbose)
+        run: |
+          drishti --verbose sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--path)
+        run: |
+           drishti --path sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--html)
+        run: |
+          drishti --html sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Run DXT Explorer (--svg)
+        run: |
+           drishti --svg sample/jlbez_8a_benchmark_write_parallel_id1321662_8-21-5892-15802854900629188750_106.darshan
+
+      - name: Setup upterm session
+        if: ${{ failure() }}
+        uses: owenthereal/action-upterm@v1
+
+      - name: Upload Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.os }}-${{ matrix.python-version }}
+          path: sample/**
+          retention-days: 1
