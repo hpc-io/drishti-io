@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 setup(
     name="drishti-io",
     keywords="drishti",
-    version="0.7.2",
+    version="0.7.4",
     author="Jean Luca Bez, Suren Byna",
     author_email="jlbez@lbl.gov, sbyna@lbl.gov",
     description="",
@@ -18,7 +18,7 @@ setup(
     url="https://github.com/hpc-io/drishti",
     install_requires=[
         'pandas>=2',
-        'darshan>=3.4',
+        'darshan',
         'rich>=12.5.1',
         'recorder-utils',
     ],
