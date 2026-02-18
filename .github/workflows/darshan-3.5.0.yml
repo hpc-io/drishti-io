@@ -44,7 +44,7 @@ jobs:
       - name: Build Darshan
         run: |
           cd darshan
-          git checkout darshan-3.5.0
+          git checkout 3.5.0
           bash prepare.sh
           cd darshan-util
           ./configure
