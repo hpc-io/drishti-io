@@ -357,7 +357,7 @@ def handler():
 
         detected_files = pd.DataFrame(df['counters'].groupby('id')[['INSIGHTS_POSIX_SMALL_READ', 'INSIGHTS_POSIX_SMALL_WRITE']].sum()).reset_index()
         detected_files.columns = ['id', 'total_reads', 'total_writes']
-        detected_files.loc[:, 'id'] = detected_files.loc[:, 'id'].astype(str)
+        detected_files['id'] = detected_files['id'].astype(str)
 
         check_small_operation(total_reads, total_reads_small, total_writes, total_writes_small, detected_files, modules, file_map, dxt_posix, dxt_posix_read_data, dxt_posix_write_data)
 
