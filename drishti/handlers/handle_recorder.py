@@ -197,8 +197,14 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
 
         #########################################################################################################################################################################
 
-        # How many requests are misaligned?
-        # TODO: 
+        # How many requests are misaligned? (file offset/size vs 4K block)
+        block = 4096
+        has_offset = df_posix['offset'].notna() & df_posix['size'].notna()
+        if has_offset.any():
+            off = df_posix.loc[has_offset, 'offset']
+            sz = df_posix.loc[has_offset, 'size']
+            total_file_not_aligned = ((off % block != 0) | ((off + sz) % block != 0)).sum()
+            check_misaligned(total_operations, 0, int(total_file_not_aligned), modules, file_map)
 
         #########################################################################################################################################################################
 
