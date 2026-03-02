@@ -12,7 +12,7 @@ setup(
     version="0.8",
     author="Jean Luca Bez, Suren Byna",
     author_email="jlbez@lbl.gov, sbyna@lbl.gov",
-    description="",
+    description="I/O insights and recommendations from Darshan and recorder logs",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/hpc-io/drishti",
