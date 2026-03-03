@@ -144,8 +144,8 @@ def load_json():
     codes = []
     if not args.split_files:
         if args.json:
-            f = open(args.json)
-            data = json.load(f)
+            with open(args.json, encoding='utf-8') as f:
+                data = json.load(f)
 
             for key, values in data.items():
                 for value in values:
@@ -169,8 +169,8 @@ def validate_thresholds():
     Validate thresholds defined by the user.
     """
     if args.config:
-        f = open(args.config)
-        data = json.load(f)
+        with open(args.config, encoding='utf-8') as f:
+            data = json.load(f)
 
         for category, thresholds_spec in data.items():
             for threshold_name, threshold_value in thresholds_spec.items():
