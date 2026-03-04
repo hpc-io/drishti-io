@@ -16,7 +16,6 @@ from drishti.includes.module import *
 from rich import print
 from packaging import version
 from drishti import __version__
-from drishti.includes.module import *
 
 
 def is_available(name):
