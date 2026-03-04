@@ -34,10 +34,12 @@ def check_log_type(path):
         if not os.path.isfile(path):
             print('Unable to open .darshan file.')
             sys.exit(os.EX_NOINPUT)
-        else: 
+        else:
             return LOG_TYPE_DARSHAN
     elif os.path.isdir(path):
         return LOG_TYPE_RECORDER
+    elif not os.path.exists(path):
+        sys.exit('Error: Path does not exist: {}'.format(path))
     else:
         print('Unsupported file format. Please provide a .darshan file or a Recorder directory.')
         sys.exit(1)
