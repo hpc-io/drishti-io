@@ -13,6 +13,7 @@ import darshan.backend.cffi_backend as darshanll
 from rich import print
 from packaging import version
 from drishti.includes.module import *
+from drishti import __version__
 
 
 def is_available(name):
@@ -734,7 +735,7 @@ def handler():
                     ' '.join(hints)
                 )
             ]),
-            title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.5[/b]',
+            title='[b][slate_blue3]DRISHTI[/slate_blue3] v.{}[/b]'.format(__version__),
             title_align='left',
             subtitle='[red][b]{} critical issues[/b][/red], [orange1][b]{} warnings[/b][/orange1], and [white][b]{} recommendations[/b][/white]'.format(
                 insights_total[HIGH],

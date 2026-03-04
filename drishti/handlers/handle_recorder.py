@@ -7,6 +7,7 @@ import pandas as pd
 from recorder_utils import RecorderReader
 from recorder_utils.build_offset_intervals import build_offset_intervals
 
+from drishti import __version__
 from drishti.includes.module import *
 
 
@@ -533,7 +534,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                         df_intervals['rank'].nunique()
                     ),
                 ]),
-                title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.5[/b]',
+                title='[b][slate_blue3]DRISHTI[/slate_blue3] v.{}[/b]'.format(__version__),
                 title_align='left',
                 subtitle='[red][b]{} critical issues[/b][/red], [orange1][b]{} warnings[/b][/orange1], and [white][b]{} recommendations[/b][/white]'.format(
                     insights_total[HIGH],
@@ -561,7 +562,7 @@ def process_helper(file_map, df_intervals, df_posix_records, fid=None):
                         df_intervals['rank'].nunique()
                     ),
                 ]),
-                title='[b][slate_blue3]DRISHTI[/slate_blue3] v.0.5[/b]',
+                title='[b][slate_blue3]DRISHTI[/slate_blue3] v.{}[/b]'.format(__version__),
                 title_align='left',
                 subtitle='[red][b]{} critical issues[/b][/red], [orange1][b]{} warnings[/b][/orange1], and [white][b]{} recommendations[/b][/white]'.format(
                     insights_total[HIGH],
