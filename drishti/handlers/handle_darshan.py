@@ -13,8 +13,6 @@ import darshan.backend.cffi_backend as darshanll
 from rich import print
 from packaging import version
 from drishti.includes.module import *
-from rich import print
-from packaging import version
 from drishti import __version__
 
 
