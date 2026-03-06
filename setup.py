@@ -21,6 +21,7 @@ setup(
         'darshan',
         'rich>=12.5.1',
         'recorder-utils',
+        'humanize',
     ],
     packages=find_packages(),
     package_data={
