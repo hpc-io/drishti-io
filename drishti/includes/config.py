@@ -2,6 +2,7 @@
 
 import os
 import json
+import humanize
 
 from rich.console import Console, Group
 from rich.padding import Padding
@@ -188,25 +189,7 @@ def convert_bytes(bytes_number):
     """
     Convert bytes into formatted string.
     """
-    tags = [
-        'bytes',
-        'KB',
-        'MB',
-        'GB',
-        'TB',
-        'PB',
-        'EB'
-    ]
-
-    i = 0
-    double_bytes = bytes_number
-
-    while (i < len(tags) and bytes_number >= 1024):
-        double_bytes = bytes_number / 1024.0
-        i = i + 1
-        bytes_number = bytes_number / 1024
-
-    return str(round(double_bytes, 2)) + ' ' + tags[i] 
+    return humanize.naturalsize(bytes_number, binary=True, format="%.2f") 
 
 
 def message(code, target, level, issue, recommendations=None, details=None):

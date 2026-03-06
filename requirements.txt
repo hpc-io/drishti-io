@@ -2,3 +2,4 @@ darshan
 pandas>=2
 rich>=12.5.1
 recorder-utils
+humanize

@@ -56,19 +56,19 @@ docker run --rm --mount \
 By default Drishti will generate an overview report in the console with recommendations:
 
 <p align="center">
-  <img src="https://github.com/hpc-io/io-insights/blob/master/images/sample-io-insights.svg?raw=true" alt="Drishti"/>
+  <img src="https://github.com/hpc-io/io-insights/blob/main/images/sample-io-insights.svg?raw=true" alt="Drishti"/>
 </p>
 
 You can also only list the issues detected by Drishti with `--issues`:
 
 <p align="center">
-  <img src="https://github.com/hpc-io/io-insights/blob/master/images/sample-io-insights-issues.svg?raw=true" alt="Drishti"/>
+  <img src="https://github.com/hpc-io/io-insights/blob/main/images/sample-io-insights-issues.svg?raw=true" alt="Drishti"/>
 </p>
 
 You can also enable the verbose mode with `--verbose` to visualize solution snippets:
 
 <p align="center">
-  <img src="https://github.com/hpc-io/io-insights/blob/master/images/sample-io-insights-verbose.svg?raw=true" alt="Drishti"/>
+  <img src="https://github.com/hpc-io/io-insights/blob/main/images/sample-io-insights-verbose.svg?raw=true" alt="Drishti"/>
 </p>
 
 ---
