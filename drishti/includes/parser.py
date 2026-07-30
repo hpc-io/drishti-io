@@ -125,4 +125,21 @@ parser.add_argument(
     help='Enable thresholds read from json file'
 )
 
+parser.add_argument(
+    '--redundant-details',
+    default=False,
+    action='store_true',
+    dest='redundant_details',
+    help='Report every redundantly accessed region per file, instead of aggregated redundancy statistics'
+)
+
+parser.add_argument(
+    '--fs-type',
+    default=None,
+    dest='fs_type',
+    choices=['lustre', 'gpfs', 'beegfs', 'nfs', 'local'],
+    help='Filesystem backing the traced files. Collective I/O recommendations depend on the '
+         'filesystem lock and metadata policy, and the trace does not carry it.'
+)
+
 args = parser.parse_args()

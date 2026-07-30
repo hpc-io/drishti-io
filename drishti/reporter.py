@@ -20,6 +20,7 @@ reporter -> /handlers -> |- handler_recorder  -|   -|
 
 LOG_TYPE_DARSHAN = 0
 LOG_TYPE_RECORDER = 1
+LOG_TYPE_EBPF = 2
 
 
 def clear():
@@ -35,6 +36,11 @@ def check_log_type(path):
             print('Unable to open .darshan file.')
             sys.exit(os.EX_NOINPUT)
         else: return LOG_TYPE_DARSHAN
+    elif path.endswith('.pfw'):
+        if not os.path.isfile(path):
+            print('Unable to open .pfw file.')
+            sys.exit(os.EX_NOINPUT)
+        else: return LOG_TYPE_EBPF
     else: # check whether is a valid recorder log
         if not os.path.isdir(path):
             print('Unable to open recorder folder.')
@@ -50,6 +56,9 @@ def main():
 
     elif log_type == LOG_TYPE_RECORDER:
         from drishti.handlers.handle_recorder import handler
+
+    elif log_type == LOG_TYPE_EBPF:
+        from drishti.handlers.handle_ebpf import handler
     
     handler()
 
