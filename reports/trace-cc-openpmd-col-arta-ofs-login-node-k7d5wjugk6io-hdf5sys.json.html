@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+.r1 {color: #5f5fd7; text-decoration-color: #5f5fd7; font-weight: bold}
+.r2 {font-weight: bold}
+.r3 {color: #c4c5b5; text-decoration-color: #c4c5b5}
+.r4 {color: #f4005f; text-decoration-color: #f4005f; font-weight: bold}
+.r5 {color: #ffaf00; text-decoration-color: #ffaf00; font-weight: bold}
+.r6 {color: #c4c5b5; text-decoration-color: #c4c5b5; font-weight: bold}
+.r7 {color: #ffaf00; text-decoration-color: #ffaf00}
+.r8 {color: #f4005f; text-decoration-color: #f4005f}
+.r9 {color: #98e024; text-decoration-color: #98e024}
+body {
+    color: #d9d9d9;
+    background-color: #0c0c0c;
+}
+</style>
+</head>
+<body>
+    <pre style="font-family:Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace"><code style="font-family:inherit">
+╭─ <span class="r1">DRISHTI</span><span class="r2"> v.0.5</span> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                                                                      │
+│  <span class="r2">EBPF TRACE</span>:    <span class="r3">trace-cc-openpmd-col-arta-ofs-login-node-k7d5wjugk6io-hdf5sys.json.pfw</span>                                                                                                               │
+│  <span class="r2">FILES</span>:          <span class="r3">344 files (0 use STDIO, 330 use POSIX, 0 use MPI-IO)</span>                                                                                                                                │
+│  <span class="r2">PROCESSES</span>       <span class="r3">25</span>                                                                                                                                                                                  │
+│                                                                                                                                                                                                      │
+╰─ <span class="r4">6 critical issues</span>, <span class="r5">3 warnings</span>, and <span class="r6">13 recommendations</span> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─ METADATA ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                                                                      │
+│  ▶ Application is read operation intensive (32.57% writes vs. 67.43% reads)                                                                                                                          │
+│  ▶ Application is read size intensive (0.24% write vs. 99.76% read)                                                                                                                                  │
+│                                                                                                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ OPERATIONS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                                                                      │
+│  <span class="r7">▶ Application is using low-performance interface</span>                                                                                                                                                    │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Consider switching to a high-performance I/O interface such as MPI-IO                                                                                                                         │
+│  <span class="r8">▶ Metadata operations slow down 54.3x when they are issued concurrently -- the server is serializing them, and namespace operations dominate</span>                                                        │
+│    <span class="r8">↪ metadata accounts for 0.234 s of the 0.463 s spent in I/O calls (50.6%)</span>                                                                                                                         │
+│    <span class="r8">↪ namespace: 41351 call(s), 0.222 s (94.7% of metadata time)</span>                                                                                                                                      │
+│    <span class="r8">↪ close: 3240 call(s), 0.012 s (5.3% of metadata time)</span>                                                                                                                                            │
+│    <span class="r8">↪ seek: 31 call(s), 0.000 s (0.0% of metadata time)</span>                                                                                                                                               │
+│    <span class="r8">↪ lock: 30 call(s), 0.000 s (0.0% of metadata time)</span>                                                                                                                                               │
+│    <span class="r8">↪ metadata arrives in 9 burst(s); the longest runs 0.302 s</span>                                                                                                                                        │
+│    <span class="r8">↪ metadata latency rises 54.3x with concurrency: median 0.000003 s with 1 call(s) in flight versus 0.000163 s with 22</span>                                                                             │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Stagger the metadata operations or reduce their number: the cost is not per call but per call in flight, so the same work issued in waves will complete faster                                │
+│      ↪ If these are namespace operations on a shared directory, spread the files across directories, or have one rank perform the operation and share the result                                     │
+│  <span class="r9">▶ I/O is already spread across 97.7% of the traced span -- there is little idle storage time left to hide it in</span>                                                                                     │
+│    <span class="r9">↪ traced span 3.729 s: I/O in flight for 3.645 s (97.7%), no I/O in flight for 0.084 s (2.3%)</span>                                                                                                     │
+│    <span class="r9">↪ I/O arrives in 1 burst(s) separated by gaps longer than 10 ms</span>                                                                                                                                   │
+│  <span class="r8">▶ 99.4% of the time inside instrumented I/O library calls (20.055 s) is spent in library code rather than in the syscalls beneath it -- this is a library tuning problem, not a storage one</span>         │
+│    <span class="r8">↪ 20.183 s spent inside instrumented library calls, of which 0.128 s is in syscalls beneath them and 20.055 s is library code</span>                                                                     │
+│    <span class="r8">↪ H5Fclose:0x14b860: 8.861 s total, 99.4% of it above the syscall layer</span>                                                                                                                           │
+│    <span class="r8">↪ H5FL_reg_calloc:0x1a5b00: 2.667 s total, 100.0% of it above the syscall layer</span>                                                                                                                   │
+│    <span class="r8">↪ H5FL_reg_malloc:0x1a5980: 2.565 s total, 100.0% of it above the syscall layer</span>                                                                                                                   │
+│    <span class="r8">↪ H5Fcreate:0x14a530: 2.067 s total, 97.5% of it above the syscall layer</span>                                                                                                                          │
+│    <span class="r8">↪ H5FL_fac_malloc:0x1a6810: 1.482 s total, 100.0% of it above the syscall layer</span>                                                                                                                   │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Most of the overhead is under HDF5 (H5Fclose:0x14b860) -- look at chunk cache sizing, metadata traversal and datatype conversion before touching the storage configuration                    │
+│  <span class="r8">▶ Small reads (&lt; 4.0 KB) consume 54.13% of read time (0.103 s)</span>                                                                                                                                      │
+│    <span class="r8">↪ small = &lt; 4.0 KB (derived from the throughput saturation point of this trace)</span>                                                                                                                   │
+│    <span class="r8">↪ 7707 of 9239 reads are small; in-call time 0.181 s (94.91% of read time)</span>                                                                                                                        │
+│    <span class="r8">↪ 7683 of the small reads sit in the fast latency mode (&lt; 600 us) and were likely served by page cache/readahead -- excluded from the costly set</span>                                                  │
+│    <span class="r8">↪ layer </span><span class="r4">application</span><span class="r8"> accounts for 100.00% of the costly small-read time</span>                                                                                                                            │
+│    <span class="r8">↪ 0.098 s of costly small-read time in UNRESOLVED_FD::pid308141::fd23</span>                                                                                                                             │
+│    <span class="r8">↪ 0.006 s of costly small-read time in UNRESOLVED_FD::pid308141::fd120</span>                                                                                                                            │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Costly small reads are issued directly by the application -- consider buffering/aggregating them into larger requests, or delegating aggregation to a library (MPI-IO collectives, HDF5)      │
+│  <span class="r9">▶ Application issues many small writes (4451) but they cost only 0.27% of write time (deferred flush cost included) -- optimizing them is unlikely to improve performance</span>                           │
+│    <span class="r9">↪ small = &lt; 64 bytes (derived from the throughput saturation point of this trace)</span>                                                                                                                 │
+│    <span class="r9">↪ 4451 of 4462 writes are small; in-call time 0.038 s (99.57% of write time)</span>                                                                                                                      │
+│    <span class="r9">↪ 1 small writes blocked in the call itself (&gt;= 100 us: dirty-page throttling, sync flags, or read-modify-write)</span>                                                                                  │
+│    <span class="r9">↪ 4450 small writes were absorbed by the page cache; their deferred flush cost is 0.000 s</span>                                                                                                         │
+│  <span class="r7">▶ Redundant read traffic across 228 file(s): 15.25 MB read to obtain 807.29 KB of distinct data, wasting 0.175 s</span>                                                                                    │
+│    <span class="r7">↪ 228 file(s) affected: 15.25 MB read to obtain 807.29 KB of distinct data (19.3x)</span>                                                                                                                │
+│    <span class="r7">↪ approximately 0.175 s and 14.47 MB of traffic moved data the application already had</span>                                                                                                            │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308141::fd23: 23.0x (23.0x within a rank, 1.0x across 1 ranks), 0.094 s wasted</span>                                                                                                │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308141::fd9: 415.5x (415.5x within a rank, 1.0x across 1 ranks), 0.012 s wasted</span>                                                                                               │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308141::fd13: 346.4x (346.4x within a rank, 1.0x across 1 ranks), 0.008 s wasted</span>                                                                                              │
+│    <span class="r7">↪ 225 further file(s) not shown -- rerun with --redundant-details for every redundant region</span>                                                                                                      │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ The redundancy is mostly within a rank: cache the region in memory after the first read instead of returning to the file system for data the rank already holds                               │
+│  <span class="r7">▶ Redundant write traffic across 52 file(s): 37.16 KB written to store 806 bytes of distinct data, wasting 0.037 s</span>                                                                                  │
+│    <span class="r7">↪ 52 file(s) affected: 37.16 KB written to store 806 bytes of distinct data (47.2x)</span>                                                                                                               │
+│    <span class="r7">↪ approximately 0.037 s and 36.37 KB of traffic moved data the application already had</span>                                                                                                            │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308164::fd13: 179.0x (179.0x within a rank, 1.0x across 1 ranks), 0.002 s wasted</span>                                                                                              │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308151::fd13: 177.0x (177.0x within a rank, 1.0x across 1 ranks), 0.002 s wasted</span>                                                                                              │
+│    <span class="r7">↪ UNRESOLVED_FD::pid308145::fd13: 177.0x (177.0x within a rank, 1.0x across 1 ranks), 0.002 s wasted</span>                                                                                              │
+│    <span class="r7">↪ 49 further file(s) not shown -- rerun with --redundant-details for every redundant region</span>                                                                                                       │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ The same bytes are written repeatedly: write each region once per checkpoint instead of rewriting it, or buffer the updates in memory and flush the final value                               │
+│  <span class="r8">▶ Application is issuing a high number (8952) of random read operations (96.89%)</span>                                                                                                                    │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Consider changing your data model to have consecutive or sequential reads                                                                                                                     │
+│  <span class="r8">▶ Application is issuing a high number (4383) of random write operations (98.23%)</span>                                                                                                                   │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Consider changing your data model to have consecutive or sequential writes                                                                                                                    │
+│  <span class="r8">▶ Detected write imbalance when accessing 2 individual files</span>                                                                                                                                        │
+│    <span class="r8">↪ Load imbalance of 88.58% detected while accessing &quot;UNRESOLVED_FD::pid308141::fd1&quot;</span>                                                                                                               │
+│    <span class="r8">↪ Load imbalance of 99.19% detected while accessing &quot;UNRESOLVED_FD::pid308145::fd1&quot;</span>                                                                                                               │
+│    <span class="r3">↪ </span><span class="r6">Recommendations:</span>                                                                                                                                                                                │
+│      ↪ Consider better balancing the data transfer between the application ranks                                                                                                                     │
+│      ↪ Consider tuning the stripe size and count to better distribute the data                                                                                                                       │
+│      ↪ If the application uses netCDF and HDF5 double-check the need to set NO_FILL values                                                                                                           │
+│      ↪ If rank 0 is the only one opening the file, consider using MPI-IO collectives                                                                                                                 │
+│                                                                                                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ THRESHOLDS ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                                                                      │
+│ Maximum random request ratio:                    <span class="r3">20.0%</span>                                                                                                                                               │
+│ Maximum random requests:                         <span class="r3">1000</span>                                                                                                                                                │
+│ Maximum read/write size difference ratio:        <span class="r3">30.0%</span>                                                                                                                                               │
+│                                                                                                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                                                                                                        
+   2026 | <span class="r3">LBNL</span> | <span class="r3">Drishti report generated at 2026-07-29 19:45:39.845161 in</span> 12.964 seconds                                                                                                               
+                                                                                                                                                                                                        
+</code></pre>
+</body>
+</html>
